@@ -341,12 +341,12 @@ public class ScriptParseService {
         Object value = null;
         if (scopeSet.contains(paramArr[0])){
             switch (ParamScope.valueOf(paramArr[0])){
-                case pathVar:value = buildValueOfPathVar(apiParams.getPathVar(),paramArr[1]);break;
-                case param:value = buildValueOfParameter(apiParams.getParam(),paramArr,1);break;
-                case body:value = buildValueOfBody(apiParams.getBody(),paramArr,1);break;
-                case cookie:value = buildValueOfCookie(apiParams.getCookie(),apiParams.getRequest(),paramArr,1);break;
-                case header:value = buildValueOfHeader(apiParams.getHeader(),paramArr,1);break;
-                case session:value = buildValueOfSession(apiParams.getSession(),paramArr,1);break;
+                case _pathVar:value = buildValueOfPathVar(apiParams.getPathVar(),paramArr[1]);break;
+                case _param:value = buildValueOfParameter(apiParams.getParam(),paramArr,1);break;
+                case _body:value = buildValueOfBody(apiParams.getBody(),paramArr,1);break;
+                case _cookie:value = buildValueOfCookie(apiParams.getCookie(),apiParams.getRequest(),paramArr,1);break;
+                case _header:value = buildValueOfHeader(apiParams.getHeader(),paramArr,1);break;
+                case _session:value = buildValueOfSession(apiParams.getSession(),paramArr,1);break;
             }
         }else {
             value = buildValueOfScriptContent(apiInfoContent.getEngineBindings() == null?null:apiInfoContent.getEngineBindings(),paramArr,0);
