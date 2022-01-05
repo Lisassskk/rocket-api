@@ -32,7 +32,7 @@
 
 >代码仓库：https://gitee.com/alenfive/rocket-api    
 
->文档地址: https://www.yuque.com/bangchui-ymqeb/rocket-api
+>文档地址: https://www.yuque.com/alenfive/rocket-api
 
 >一分钟系列: https://blog.csdn.net/maple_son/article/details/108196584  
   
