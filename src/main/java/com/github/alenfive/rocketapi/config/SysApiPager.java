@@ -33,22 +33,22 @@ public class SysApiPager implements IApiPager {
     }
 
     @Override
-    public String getIndexVarName() {
+    public String getOffsetVarName() {
         return "index";
     }
 
     @Override
-    public Integer getIndexVarValue(Integer pageSize,Integer pageNo) {
+    public Integer getOffset(Integer pageSize, Integer pageNo) {
         return (pageNo-1)*pageSize;
     }
 
     @Override
-    public Integer getPageSizeDefaultValue() {
-        return 15;
+    public Integer getPageNo() {
+        return null;
     }
 
     @Override
-    public Integer getPageNoDefaultValue() {
-        return 1;
+    public Integer getPageSize() {
+        return null;
     }
 }

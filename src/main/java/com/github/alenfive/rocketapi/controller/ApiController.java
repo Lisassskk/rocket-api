@@ -2,29 +2,25 @@ package com.github.alenfive.rocketapi.controller;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.alenfive.rocketapi.config.QLRequestMappingFactory;
 import com.github.alenfive.rocketapi.config.RocketApiProperties;
-import com.github.alenfive.rocketapi.datasource.DataSourceDialect;
-import com.github.alenfive.rocketapi.datasource.DataSourceManager;
 import com.github.alenfive.rocketapi.entity.*;
 import com.github.alenfive.rocketapi.entity.vo.*;
-import com.github.alenfive.rocketapi.extend.*;
-import com.github.alenfive.rocketapi.function.IFunction;
+import com.github.alenfive.rocketapi.extend.ApiInfoContent;
+import com.github.alenfive.rocketapi.extend.IApiDocSync;
+import com.github.alenfive.rocketapi.extend.IScriptEncrypt;
+import com.github.alenfive.rocketapi.extend.IUserAuthorization;
 import com.github.alenfive.rocketapi.script.IScriptParse;
-import com.github.alenfive.rocketapi.service.LoginService;
+import com.github.alenfive.rocketapi.service.*;
 import com.github.alenfive.rocketapi.utils.GenerateId;
-import com.github.alenfive.rocketapi.utils.PackageUtil;
 import com.github.alenfive.rocketapi.utils.RequestUtils;
 import com.github.alenfive.rocketapi.utils.SignUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.ApplicationContext;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.core.io.Resource;
+import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.util.AntPathMatcher;
 import org.springframework.util.CollectionUtils;
@@ -32,21 +28,18 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 
 /**
@@ -60,12 +53,10 @@ import java.util.stream.Stream;
 public class ApiController {
 
     @Autowired
-    private QLRequestMappingFactory mappingFactory;
-
-    @Autowired
     private ApiInfoContent apiInfoContent;
 
     @Autowired
+    @Lazy
     private IScriptParse scriptParse;
 
     @Autowired
@@ -84,35 +75,36 @@ public class ApiController {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private ApplicationContext context;
+    private RocketApiProperties properties;
 
     @Autowired
-    private RocketApiProperties rocketApiProperties;
+    private DataSourceService dataSourceService;
 
     @Autowired
-    private DataSourceManager dataSourceManager;
+    private ApiInfoService apiInfoService;
 
     @Autowired
-    private IApiInfoCache apiInfoCache;
+    private ConfigService configService;
 
     @Autowired
-    private Map<String,Object> cache = new ConcurrentHashMap<>();
+    private CompletionService completionService;
 
     /**
      * LOAD API LIST
      */
     @GetMapping("/api-list")
     public ApiResult getPathList(boolean isDb) throws Exception {
-        List<ApiInfo> result = mappingFactory.getPathList(isDb).stream()
+        List<ApiInfo> result = apiInfoService.getPathList(isDb).stream()
                 .sorted(Comparator.comparing(ApiInfo::getName).thenComparing(ApiInfo::getFullPath))
                 .collect(Collectors.toList());
 
 
-        result = result.stream().map(item->{
-            ApiInfo apiInfo = new ApiInfo();
-            BeanUtils.copyProperties(item,apiInfo);
-            return apiInfo;
-        }).collect(Collectors.toList());
+        result = result.stream()
+                .map(item->{
+                    ApiInfo apiInfo = new ApiInfo();
+                    BeanUtils.copyProperties(item,apiInfo);
+                    return apiInfo;
+                }).collect(Collectors.toList());
 
         return  ApiResult.success(result);
     }
@@ -122,7 +114,7 @@ public class ApiController {
      */
     @GetMapping("/api-info/{id}")
     public ApiResult getPathList(@PathVariable String id) throws Exception {
-        ApiInfo apiInfo = mappingFactory.getPathList(false).stream().filter(item->item.getId().equals(id)).findFirst().orElse(null);
+        ApiInfo apiInfo = apiInfoService.getPathList(false).stream().filter(item->item.getId().equals(id)).findFirst().orElse(null);
 
         if (apiInfo == null || StringUtils.isEmpty(apiInfo.getScript())){
             return ApiResult.success(apiInfo);
@@ -142,7 +134,7 @@ public class ApiController {
         if (StringUtils.isEmpty(apiInfoId)){
             return ApiResult.success(null);
         }
-        List<ApiInfoHistory> historyList = mappingFactory.lastApiInfo(apiInfoId,pageSize,pageNo);
+        List<ApiInfoHistory> historyList = apiInfoService.lastApiInfo(apiInfoId,pageSize,pageNo);
         for (ApiInfoHistory history : historyList) {
             history.setScript(scriptEncrypt.decrypt(history.getScript()));
         }
@@ -171,19 +163,7 @@ public class ApiController {
                 apiInfo.setScript(scriptEncrypt.encrypt(apiInfo.getScript()));
             }
 
-            RefreshMapping refreshMapping = new RefreshMapping();
-
-            //更新时，历史记录为缓存记录
-            if (!StringUtils.isEmpty(apiInfo.getId())){
-                ApiInfo oldApiInfo = apiInfoCache.getAll().stream().filter(item->item.getId().equals(apiInfo.getId())).findFirst().orElse(null);
-                refreshMapping.setOldMapping(MappingVo.builder().method(oldApiInfo.getMethod()).fullPath(oldApiInfo.getFullPath()).build());
-            }
-
-            String apiInfoId = mappingFactory.saveApiInfo(apiInfo);
-
-            refreshMapping.setNewMapping(MappingVo.builder().method(apiInfo.getMethod()).fullPath(apiInfo.getFullPath()).build());
-            //触发刷新
-            apiInfoCache.refreshNotify(refreshMapping);
+            String apiInfoId = apiInfoService.saveApiInfo(apiInfo);
 
             return ApiResult.success(apiInfoId);
         }catch (Exception e){
@@ -213,19 +193,23 @@ public class ApiController {
 
         Collection<ApiInfo> apiInfos = null;
         Collection<ApiDirectory> directories = null;
+
+        List<ApiDirectory> dbDirectories = apiInfoService.loadDirectoryList();
         if (syncReq.getIncrement() == 1){
-            apiInfos = mappingFactory.getPathList(false).stream().filter(item->syncReq.getApiInfoIds().contains(item.getId())).collect(Collectors.toList());
+
+            apiInfos = apiInfoService.getPathList(false).stream().filter(item->syncReq.getApiInfoIds().contains(item.getId())).collect(Collectors.toList());
 
             Set<ApiDirectory> directorySet = new HashSet<>();
             for (ApiInfo apiInfo : apiInfos){
-                ApiDirectory directory = mappingFactory.loadDirectoryList(false).stream().filter(item->item.getId().equals(apiInfo.getDirectoryId())).findFirst().orElse(null);
-                mappingFactory.relationParentDirectory(directorySet,mappingFactory.loadDirectoryList(false),directory);
-                directories = directorySet;
+                ApiDirectory directory = dbDirectories.stream().filter(item->item.getId().equals(apiInfo.getDirectoryId())).findFirst().orElse(null);
+                apiInfoService.relationParentDirectory(directorySet,dbDirectories,directory);
             }
+            directories = directorySet;
         }else{
-            apiInfos = mappingFactory.getPathList(false);
-            directories = mappingFactory.loadDirectoryList(false);
+            apiInfos = apiInfoService.getPathList(false);
+            directories = dbDirectories;
         }
+
         try {
             //签名验证
             Map<String,Object> signMap = new HashMap<>(4);
@@ -239,11 +223,9 @@ public class ApiController {
             signMap.put("sign",sign);
 
             String remoteUrl = syncReq.getRemoteUrl().endsWith("/")?syncReq.getRemoteUrl().substring(0,syncReq.getRemoteUrl().length()-1):syncReq.getRemoteUrl();
-            String url = remoteUrl+(rocketApiProperties.getBaseRegisterPath()+"/accept-sync").replace("//","/");
-            SimpleClientHttpRequestFactory factory=new SimpleClientHttpRequestFactory();
-            factory.setConnectTimeout(60000);
-            factory.setReadTimeout(60000);
-            RestTemplate restTemplate = new RestTemplate(factory);
+            String url = remoteUrl+(properties.getBaseRegisterPath()+"/accept-sync").replace("//","/");
+
+            RestTemplate restTemplate = getRestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON_UTF8);
             HttpEntity<String> requestHttpEntity = new HttpEntity<>(objectMapper.writeValueAsString(signMap), headers);
@@ -253,6 +235,13 @@ public class ApiController {
             e.printStackTrace();
             return ApiResult.fail(e.toString());
         }
+    }
+
+    private RestTemplate getRestTemplate(){
+        SimpleClientHttpRequestFactory factory=new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(60000);
+        factory.setReadTimeout(60000);
+        return new RestTemplate(factory);
     }
 
     /**
@@ -268,15 +257,7 @@ public class ApiController {
 
         try {
 
-            ApiInfo oldApiInfo = apiInfoCache.getAll().stream().filter(item->item.getId().equals(apiInfo.getId())).findFirst().orElse(null);
-
-            RefreshMapping refreshMapping = new RefreshMapping();
-            refreshMapping.setOldMapping(MappingVo.builder().method(oldApiInfo.getMethod()).fullPath(oldApiInfo.getFullPath()).build());
-
-            mappingFactory.deleteApiInfo(apiInfo);
-
-            //刷新通知
-            apiInfoCache.refreshNotify(refreshMapping);
+            apiInfoService.deleteApiInfo(apiInfo);
 
             return ApiResult.success(null);
         }catch (Exception e){
@@ -330,7 +311,7 @@ public class ApiController {
         if (body instanceof Map){
             params.putAll((Map<? extends String, ?>) body);
         }
-        params.put(rocketApiProperties.getBodyRootKey(),body);
+        params.put(properties.getBodyRootKey(),body);
         return params;
     }
 
@@ -344,7 +325,7 @@ public class ApiController {
     }
 
     private Map<String,String> getPathVar(String pattern,String url){
-        Integer beginIndex = url.indexOf("/",7);
+        Integer beginIndex = url.indexOf("/",8);
         if (beginIndex == -1){
             return null;
         }
@@ -391,7 +372,7 @@ public class ApiController {
             apiExample.setResponseBody(URLEncoder.encode(apiExample.getResponseBody(),"utf-8"));
         }
 
-        return ApiResult.success(mappingFactory.saveExample(apiExample));
+        return ApiResult.success(apiInfoService.saveExample(apiExample));
     }
 
     /**
@@ -400,7 +381,7 @@ public class ApiController {
     @GetMapping("/api-example/last")
     public ApiResult lastApiExample(String apiInfoId,Integer pageSize,Integer pageNo) throws Exception {
 
-        List<ApiExample> result = mappingFactory.listApiExampleScript(apiInfoId,pageSize,pageNo);
+        List<ApiExample> result = apiInfoService.listApiExampleScript(apiInfoId,pageSize,pageNo);
         result.forEach(item->{
             if (!StringUtils.isEmpty(item.getResponseBody())){
                 try {
@@ -422,7 +403,7 @@ public class ApiController {
         if(StringUtils.isEmpty(user)){
             return ApiResult.fail("Permission denied");
         }
-        mappingFactory.deleteExampleList(deleteExamleReq.getApiExampleList());
+        apiInfoService.deleteExampleList(deleteExamleReq.getApiExampleList());
         return ApiResult.success(null);
     }
 
@@ -452,9 +433,9 @@ public class ApiController {
      */
     @GetMapping("/api-doc-push")
     public ApiResult apiDocPush(String apiInfoId) throws Exception {
-        Collection<ApiInfo> apiInfos = mappingFactory.getPathList(false);
+        Collection<ApiInfo> apiInfos = apiInfoService.getPathList(false);
         String result = null;
-        List<ApiDirectory> directoryList = mappingFactory.loadDirectoryList(false);
+        List<ApiDirectory> directoryList = apiInfoService.loadDirectoryList();
         List<DocApi> docsInfoList = null;
         if (!StringUtils.isEmpty(apiInfoId)){
 
@@ -469,7 +450,7 @@ public class ApiController {
     }
 
     private ApiExample buildLastApiExample(String apiInfoId) {
-        List<ApiExample> result = mappingFactory.listApiExampleScript(apiInfoId,1,1);
+        List<ApiExample> result = apiInfoService.listApiExampleScript(apiInfoId,1,1);
         if (CollectionUtils.isEmpty(result)){
             return null;
         }
@@ -498,7 +479,7 @@ public class ApiController {
 
         Object result = null;
         try {
-            result = mappingFactory.getApiConfig();
+            result = configService.getYmlConfig();
         } catch (Exception e) {
             return ApiResult.fail(e.getMessage());
         }
@@ -518,7 +499,7 @@ public class ApiController {
         }
 
         try {
-            mappingFactory.saveApiConfig(configContext);
+            configService.saveYmlConfig(configContext);
         } catch (Exception e) {
             return ApiResult.fail(e.getMessage());
         }
@@ -531,7 +512,7 @@ public class ApiController {
      */
     @GetMapping("/directory/list")
     public ApiResult directoryList(){
-        return ApiResult.success(mappingFactory.loadDirectoryList(false).stream()
+        return ApiResult.success(apiInfoService.loadDirectoryList().stream()
                 .sorted(Comparator.comparing(ApiDirectory::getName).thenComparing(ApiDirectory::getPath))
                 .collect(Collectors.toList()));
     }
@@ -549,7 +530,7 @@ public class ApiController {
         }
 
         try {
-            mappingFactory.saveDirectory(directory);
+            apiInfoService.saveDirectory(directory);
         } catch (Exception e) {
             return ApiResult.fail(e.getMessage());
         }
@@ -567,10 +548,8 @@ public class ApiController {
         if(StringUtils.isEmpty(user)){
             return ApiResult.fail("Permission denied");
         }
-
         try {
-            mappingFactory.removeDirectory(directory);
-            mappingFactory.loadDirectoryList(true);
+            apiInfoService.removeDirectory(directory);
         } catch (Exception e) {
             return ApiResult.fail(e.getMessage());
         }
@@ -578,89 +557,70 @@ public class ApiController {
     }
 
     /**
+     * 接口导出
+     * @param exportReq
+     * @return
+     */
+    @PostMapping("/export")
+    public void exportApi(ExportReq exportReq,HttpServletRequest request,HttpServletResponse response) throws Exception {
+
+        String user = loginService.getUser(exportReq.getToken());
+
+
+        String resStr = null;
+        if(StringUtils.isEmpty(user)){
+            resStr = objectMapper.writeValueAsString(ApiResult.fail("Permission denied"));
+            response.getOutputStream().write(resStr.getBytes());
+            return;
+        }
+
+        ExportRes exportRes = apiInfoService.exportApi(exportReq);
+
+        response.setCharacterEncoding("UTF-8");
+        response.addHeader("Content-Disposition", "attachment;filename=" + URLEncoder.encode(exportReq.getFileName(), "UTF-8")+".json");
+        response.addHeader("Content-Type","application/octet-stream");
+        resStr = objectMapper.writeValueAsString(exportRes);
+        response.getOutputStream().write(resStr.getBytes());
+    }
+
+    /**
+     * 接口导入
+     * @param file
+     * @param request
+     * @param override 0：增量，1：覆盖
+     * @return
+     */
+    @PostMapping("/import")
+    public ApiResult importApiInfo(MultipartFile file,Integer override,HttpServletRequest request){
+        String user = loginService.getUser(request);
+
+        if(StringUtils.isEmpty(user)){
+            return ApiResult.fail("Permission denied");
+        }
+
+        if (file == null){
+            return ApiResult.fail("file is null");
+        }
+
+        try {
+            ExportRes exportRes = objectMapper.readValue(file.getBytes(),ExportRes.class);
+            Object result = apiInfoService.importAPI(exportRes.getDirectories(),exportRes.getApiInfos(),override == 1);
+            return ApiResult.success(result);
+        }catch (Exception e){
+            e.printStackTrace();
+            return ApiResult.fail(e.getMessage());
+        }
+    }
+
+    /**
      * 自动完成，类型获取
      */
     @GetMapping("/completion-items")
     public ApiResult provideCompletionTypes() throws Exception {
-        String cacheKey = "completion-items-cache";
-        CompletionResult result = null;
-        if ((result = (CompletionResult) cache.get(cacheKey)) != null){
-            return ApiResult.success(result);
-        }
-
-        result = new CompletionResult();
-        Map<String,List<MethodVo>> clazzs = new LinkedHashMap<>();
-        Map<String,String> variables = new HashMap<>();
-        Map<String,String> syntax = new HashMap<>();
-        Map<String,List<TableInfo>> dbInfos = new HashMap<>();
-        result.setClazzs(clazzs);
-        result.setVariables(variables);
-        result.setSyntax(syntax);
-        result.setDbInfos(dbInfos);
-
-        //获取内置自定义函数变量
-        Collection<IFunction> functionList = context.getBeansOfType(IFunction.class).values();
-        functionList.forEach(item->{
-            variables.put(item.getVarName(),item.getClass().getName());
-        });
-
-        //spring bean对象获取
-        Map<String,Object> beans = context.getBeansOfType(Object.class);
-
-        for (String key : beans.keySet()){
-            buildClazz(clazzs,beans.get(key).getClass());
-        }
-
-        //本包JAVA类
-        List<Class> classList = PackageUtil.loadClassByLoader(Thread.currentThread().getContextClassLoader());
-        for (Class clazz : classList){
-            buildClazz(clazzs,clazz);
-        }
-
-        //基础包 java.util java类
-        List<String> classNames = PackageUtil.scan();
-        for (String clazz : classNames){
-            buildClazz(clazzs,clazz);
-        }
-
-        //常用语法提示
-        syntax.put("foreach","for(item in ${1:collection}){\n\t\n}");
-        syntax.put("fori","for(${1:i}=0;${1:i}<;${1:i}++){\n\t\n}");
-        syntax.put("for","for(${1}){\n\t\n}");
-        syntax.put("if","if(${1:condition}){\n\n}");
-        syntax.put("ifelse","if(${1:condition}){\n\t\n}else{\n\t\n}");
-        syntax.put("import","import ");
-        syntax.put("continue","continue;");
-        syntax.put("break","break;");
-
-        //数据库信息获取
-        Map<String, DataSourceDialect> dataSourceDialectMap = dataSourceManager.getDialectMap();
-        dataSourceDialectMap.forEach((key,value)->{
-            List<TableInfo> tableInfos = value.buildTableInfo();
-            if (tableInfos != null){
-                dbInfos.put(key,tableInfos);
-            }
-        });
-
-        //常用工具类获取
-
-        cache.put(cacheKey,result);
-        return ApiResult.success(result);
+        return ApiResult.success(completionService.provideCompletionTypes());
     }
 
-    private void buildClazz(Map<String, List<MethodVo>> clazzs, String clazz) {
-        if (clazzs.get(clazz) != null || clazz.indexOf("$") !=-1){
-            return;
-        }
-        clazzs.put(clazz,Collections.EMPTY_LIST);
-    }
 
-    private void buildClazz(Map<String, List<MethodVo>> clazzs, Class clazz) {
-        if (clazzs.get(clazz.getName()) != null || clazz.getName().indexOf("$") !=-1){
-            return;
-        }
-        clazzs.put(clazz.getName(),buildMethod(clazz));
-    }
 
     /**
      * 自动完成，方法解析
@@ -669,33 +629,120 @@ public class ApiController {
     public ApiResult provideCompletionItems(@RequestBody ProvideCompletionReq completionReq){
         try {
             Class clazz = Class.forName(completionReq.getClazz());
-            return ApiResult.success(buildMethod(clazz));
+            return ApiResult.success(completionService.buildMethod(clazz));
         }catch (Throwable e){}
         return ApiResult.success(Collections.emptyList());
     }
 
-    private List<MethodVo> buildMethod(Class clazz){
-        List<MethodVo> methodVos = new ArrayList<>();
-        //成员变量
-        for(Field field : clazz.getFields()){
-            methodVos.add(MethodVo.builder()
-                    .type("field")
-                    .varName(field.getName())
-                    .resultType(field.getType().getName())
-                    .build());
+
+
+    @GetMapping("/db-config/list")
+    public ApiResult listDbConfig(){
+        try {
+            List<DBConfig> dbConfigs = dataSourceService.getDBConfig();
+            return ApiResult.success(dbConfigs);
+        }catch (Exception e){
+            e.printStackTrace();
+            return ApiResult.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 添加数据源
+     * @param config
+     */
+    @PostMapping("/db-config")
+    public ApiResult saveDBConfig(@RequestBody DBConfig config,HttpServletRequest request) {
+
+        String user = loginService.getUser(request);
+
+        if(StringUtils.isEmpty(user)){
+            return ApiResult.fail("Permission denied");
         }
 
-        //方法
-        for (Method method : clazz.getMethods()){
-            boolean isStatic = Modifier.isStatic(method.getModifiers());
-            String params = Stream.of(method.getParameters()).map(item->item.getType().getSimpleName()+" "+item.getName()).collect(Collectors.joining(","));
-            methodVos.add(MethodVo.builder()
-                    .type(isStatic?"static":"public")
-                    .varName(method.getName())
-                    .params(params)
-                    .resultType(method.getReturnType().getName())
-                    .build());
+        try {
+            return ApiResult.success(dataSourceService.saveDBConfig(config));
+        }catch (Exception e){
+            e.printStackTrace();
+            return ApiResult.fail(e.getMessage());
         }
-        return methodVos;
+    }
+
+    /**
+     * 删除数据源
+     * @param config
+     */
+    @DeleteMapping("/db-config")
+    public ApiResult deleteDBConfig(@RequestBody DBConfig config,HttpServletRequest request) throws IOException {
+
+        String user = loginService.getUser(request);
+
+        if(StringUtils.isEmpty(user)){
+            return ApiResult.fail("Permission denied");
+        }
+
+        try {
+            dataSourceService.deleteDBConfig(config);
+            return ApiResult.success(null);
+        }catch (Exception e){
+            e.printStackTrace();
+            return ApiResult.fail(e.getMessage());
+        }
+    }
+
+    @GetMapping("/db-driver/list")
+    public ApiResult listDbDriver(){
+        try {
+            return ApiResult.success(completionService.getDriver());
+        }catch (Exception e){
+            e.printStackTrace();
+            return ApiResult.fail(e.getMessage());
+        }
+    }
+
+    /**
+     * 测试数据源
+     * @param config
+     */
+    @PostMapping("/db-test")
+    public ApiResult testDBConfig(@RequestBody DBConfig config,HttpServletRequest request) {
+
+        String user = loginService.getUser(request);
+
+        if(StringUtils.isEmpty(user)){
+            return ApiResult.fail("Permission denied");
+        }
+
+        try {
+            dataSourceService.testDBConfig(config);
+            return ApiResult.success(null);
+        }catch (Exception e){
+            e.printStackTrace();
+            return ApiResult.fail(e.getMessage());
+        }
+    }
+
+    @GetMapping("/check-version")
+    public ApiResult checkVersion(){
+        try {
+            String urlStr = "https://img.shields.io/maven-metadata/v.json?label=maven-central&metadataUrl=https://repo1.maven.org/maven2/com/github/alenfive/rocket-api-boot-starter/maven-metadata.xml";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.36");
+
+            HttpEntity<Resource> httpEntity = new HttpEntity<>(headers);
+
+            SimpleClientHttpRequestFactory factory=new SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(60000);
+            factory.setReadTimeout(60000);
+            RestTemplate restTemplate = new RestTemplate();
+
+            ResponseEntity<Object> response = restTemplate.exchange(urlStr, HttpMethod.GET,
+                    httpEntity, Object.class);
+            return ApiResult.success(response.getBody());
+        }catch (Exception e){
+            return ApiResult.fail(e.getMessage());
+        }
+
     }
 }

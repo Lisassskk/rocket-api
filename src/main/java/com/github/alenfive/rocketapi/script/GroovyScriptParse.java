@@ -4,16 +4,20 @@ package com.github.alenfive.rocketapi.script;
  * Groovy脚本执行器
  */
 
+import com.github.alenfive.rocketapi.config.RocketApiProperties;
+import com.github.alenfive.rocketapi.datasource.DataSourceDialect;
+import com.github.alenfive.rocketapi.datasource.DataSourceManager;
+import com.github.alenfive.rocketapi.datasource.DialectTransactionManager;
 import com.github.alenfive.rocketapi.entity.ApiInfo;
 import com.github.alenfive.rocketapi.entity.ApiParams;
 import com.github.alenfive.rocketapi.extend.ApiInfoContent;
-import com.github.alenfive.rocketapi.extend.IApiPager;
 import com.github.alenfive.rocketapi.function.IFunction;
-import com.github.alenfive.rocketapi.service.ScriptParseService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -23,6 +27,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.SimpleBindings;
 import java.util.Collection;
+import java.util.regex.Pattern;
 
 @Component
 public class GroovyScriptParse implements IScriptParse{
@@ -34,16 +39,24 @@ public class GroovyScriptParse implements IScriptParse{
     private ApplicationContext context;
 
     @Autowired
-    private ScriptParseService parseService;
+    private RocketApiProperties rocketApiProperties;
+
+    @Autowired(required = false)
+    private TransactionDefinition transactionDefinition;
 
     @Autowired
-    private IApiPager apiPager;
+    private DataSourceManager dataSourceManager;
 
     private Collection<IFunction> functionList;
 
     private ScriptEngineManager factory = new ScriptEngineManager();
 
     private ScriptEngine engine = null;
+
+    private Pattern selectSqlPattern = Pattern.compile("^(\\s*select\\s+)", Pattern.CASE_INSENSITIVE);
+    private Pattern insertSqlPattern = Pattern.compile("^(\\s*(replace|insert)\\s+into\\s+)", Pattern.CASE_INSENSITIVE);
+    private Pattern updateSqlPattern = Pattern.compile("^(\\s*update\\s+[A-Za-z\\-0-9_]+\\s+set )", Pattern.CASE_INSENSITIVE);
+    private Pattern deleteSqlPattern = Pattern.compile("^(\\s*delete\\s+from\\s+[A-Za-z\\-0-9_]+)", Pattern.CASE_INSENSITIVE);
 
     @PostConstruct
     public void init(){
@@ -55,16 +68,19 @@ public class GroovyScriptParse implements IScriptParse{
     }
 
     @Override
-    @Transactional(rollbackFor=Exception.class)
     public Object runScript(String script, ApiInfo apiInfo, ApiParams apiParams) throws Throwable {
 
-        Integer pageNo = buildPagerNo(apiParams);
-        Integer pageSize = buildPagerSize(apiParams);
-        apiParams.putParam(apiPager.getPageNoVarName(),pageNo);
-        apiParams.putParam(apiPager.getPageSizeVarName(),pageSize);
-        apiParams.putParam(apiPager.getIndexVarName(),apiPager.getIndexVarValue(pageSize,pageNo));
+        DataSourceDialect dialect = dataSourceManager.getDialectMap().get(apiInfo.getDatasource());
+
+        PlatformTransactionManager transactionManager = null;
+        if (dialect instanceof DialectTransactionManager){
+            transactionManager = ((DialectTransactionManager)dialect).getTransactionManager();
+        }
+
+        TransactionStatus transactionStatus = null;
 
         try {
+            script = buildSQLScript(script,apiInfo);
 
             //注入变量
             apiInfoContent.setApiInfo(apiInfo);
@@ -79,9 +95,25 @@ public class GroovyScriptParse implements IScriptParse{
 
             //注入属性变量
             buildScriptParams(bindings,apiParams);
+
+            //手动开启事务
+            if (transactionManager != null){
+                transactionStatus = transactionManager.getTransaction(transactionDefinition);
+            }
+
             Object result = this.engineEval(script,bindings);
+
+            //手动提交事务
+            if (transactionManager != null) {
+                transactionManager.commit(transactionStatus);
+            }
             return result;
         }catch (Exception e){
+
+            if (transactionStatus != null) {
+                //手动回滚
+                transactionManager.rollback(transactionStatus);
+            }
             if (e.getCause() != null && e.getCause().getCause() != null){
                 throw e.getCause().getCause();
             }else{
@@ -89,6 +121,36 @@ public class GroovyScriptParse implements IScriptParse{
             }
         }
 
+    }
+
+    private String buildSQLScript(String script,ApiInfo apiInfo) {
+
+        String func = null;
+        script = script.trim();
+        if (selectSqlPattern.matcher(script).find()){
+            if (apiInfo.getFullPath().endsWith(rocketApiProperties.getSqlModel().getPagerSuffix())){
+                func = "pager";
+            }else if(apiInfo.getFullPath().endsWith(rocketApiProperties.getSqlModel().getFindOneSuffix())){
+                func = "findOne";
+            }else if(apiInfo.getFullPath().endsWith(rocketApiProperties.getSqlModel().getCountSuffix())){
+                func = "count";
+            }else {
+                func = "find";
+            }
+        }else if(insertSqlPattern.matcher(script).find()){
+            func = "insert";
+        }else if(deleteSqlPattern.matcher(script).find()){
+            func = "remove";
+        }else if(updateSqlPattern.matcher(script).find()){
+            func = "update";
+        }
+
+        if (func == null){
+            return script;
+        }
+
+        StringBuilder sb = new StringBuilder("db.").append(func).append("('''").append(script).append("''');");
+        return sb.toString();
     }
 
     @Override
@@ -104,23 +166,7 @@ public class GroovyScriptParse implements IScriptParse{
         }
     }
 
-    private Integer buildPagerNo(ApiParams apiParams) {
-        Object value = parseService.buildParamItem(apiParams,null,apiPager.getPageNoVarName());
-        if (StringUtils.isEmpty(value)){
-            apiParams.putParam(apiPager.getPageNoVarName(),apiPager.getPageNoDefaultValue());
-            return apiPager.getPageNoDefaultValue();
-        }
-        return Integer.valueOf(value.toString());
-    }
 
-    private Integer buildPagerSize(ApiParams apiParams) {
-        Object value = parseService.buildParamItem(apiParams,null,apiPager.getPageSizeVarName());
-        if (StringUtils.isEmpty(value)){
-            apiParams.putParam(apiPager.getPageSizeVarName(),apiPager.getPageSizeDefaultValue());
-            return apiPager.getPageSizeDefaultValue();
-        }
-        return Integer.valueOf(value.toString());
-    }
 
     private void buildScriptParams(Bindings bindings, ApiParams apiParams) {
         bindings.put("pathVar",apiParams.getPathVar());

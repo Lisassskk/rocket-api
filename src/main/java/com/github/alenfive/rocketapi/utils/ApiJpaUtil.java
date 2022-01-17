@@ -10,23 +10,11 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
 import org.springframework.util.CollectionUtils;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-/**
- * @Description:
- * @Copyright: Copyright (c) 2019  ALL RIGHTS RESERVED.
- * @Company: 成都国盛天丰技术有限责任公司
- * @Author: 米华军
- * @CreateDate: 2021/1/4 22:29
- * @UpdateDate: 2021/1/4 22:29
- * @UpdateRemark: init
- * @Version: 1.0
- * @menu
- */
 @SuppressWarnings("DuplicatedCode")
 @Slf4j
 public class ApiJpaUtil {
@@ -146,7 +134,6 @@ public class ApiJpaUtil {
 
     public static<T> List<T> pageByEntity(NamedParameterJdbcTemplate jdbcTemplate, T apiObject, DataSourceDialect sqlDataSource, IApiPager apiPager, Page page) {
         String tableName = ApiAnnotationUtil.getApiTableName(apiObject.getClass());
-
         String where = FieldUtils.allFields(apiObject.getClass()).stream().filter(item->{
             item.setAccessible(true);
             try {
@@ -165,8 +152,7 @@ public class ApiJpaUtil {
                 .append(where == null?"":" where "+where)
                 .append(" order by id desc ")
                 .toString();
-
-        sql = sqlDataSource.buildPageScript(sql,null,null,apiPager,page);
+        sql = sqlDataSource.buildPageScript(sql,apiPager,page);
         log.debug("generate script:{}",sql);
         SqlParameterSource parameterSource = new BeanPropertySqlParameterSource(apiObject);
         return jdbcTemplate.query(sql,parameterSource,new BeanPropertyRowMapper(apiObject.getClass()));

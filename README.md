@@ -28,11 +28,11 @@
  
 ### 资源地址
 
->在线演示：http://39.98.181.90:8081/interface-ui    
+>在线演示：http://39.98.181.90:8081/interface-ui?id=5f433b40f8b91c43f8835d3c&page=editor    
 
 >代码仓库：https://gitee.com/alenfive/rocket-api    
 
->文档地址: https://alenfive.gitbook.io/rocket-api/ 
+>文档地址: https://www.yuque.com/alenfive/rocket-api
 
 >一分钟系列: https://blog.csdn.net/maple_son/article/details/108196584  
   

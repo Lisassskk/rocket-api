@@ -2,24 +2,29 @@ package com.github.alenfive.rocketapi.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.alenfive.rocketapi.datasource.DataSourceDialect;
+import com.github.alenfive.rocketapi.datasource.JdbcDataSource;
 import com.github.alenfive.rocketapi.entity.ApiParams;
 import com.github.alenfive.rocketapi.entity.ParamScope;
 import com.github.alenfive.rocketapi.entity.vo.ArrVar;
-import com.github.alenfive.rocketapi.entity.vo.IndexScope;
+import com.github.alenfive.rocketapi.entity.vo.ConditionMatcher;
+import com.github.alenfive.rocketapi.entity.vo.ScriptLanguageParam;
 import com.github.alenfive.rocketapi.extend.ApiInfoContent;
-import com.github.alenfive.rocketapi.script.GroovyScriptParse;
+import com.github.alenfive.rocketapi.script.IScriptParse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.jdbc.core.SqlParameterValue;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import javax.script.Bindings;
+import javax.script.SimpleBindings;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
+import java.lang.reflect.Field;
+import java.sql.Types;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -38,79 +43,35 @@ public class ScriptParseService {
 
     @Autowired
     @Lazy
-    private GroovyScriptParse scriptParse;
+    private IScriptParse scriptParse;
 
     @Autowired
     private ApiInfoContent apiInfoContent;
 
     private Set<String> scopeSet = Stream.of(ParamScope.values()).map(ParamScope::name).collect(Collectors.toSet());
 
-    public void parse(StringBuilder script, ApiParams apiParams, DataSourceDialect sourceDialect,Map<String,Object> specifyParams) {
-        buildIf(script,apiParams,specifyParams);
-        buildParams(script,apiParams,sourceDialect,specifyParams);
+    private Pattern sqlTypePattern = null;
+    {
+        Field[] fields = Types.class.getFields();
+        StringBuilder typeMatcherStr = new StringBuilder(",\\s*(");
+        typeMatcherStr.append(Arrays.stream(fields).map(item->item.getName()).collect(Collectors.joining("|")));
+        typeMatcherStr.append(")\\s*$");
+
+        //sqlTypePattern = Pattern.compile(typeMatcherStr.toString());
+        sqlTypePattern = Pattern.compile(",\\s*\\w+\\s*$");
     }
 
-    /**多行文本替换
-     *  """
-     *  str
-     *  """
-     * @param script
-     */
-    private void buildMutilStr(StringBuilder script) {
-        IndexScope scope = null;
-        String tokenFlag = "\"\"\"";
-        while ((scope = buildIndexScope(script,tokenFlag,tokenFlag)) != null ){
-            String newToken = scope.getToken()
-                    .replace(tokenFlag,"")
-                    .replace("\"","\\\"")
-                    .replace("\r\n","\"+\r\n\"");
-            script.replace(scope.getBeginIndex(),scope.getEndIndex()+1,"\""+newToken+"\"");
-        }
+    public Map<String,Object> parse(StringBuilder script, DataSourceDialect sourceDialect,Map<String,Object> specifyParams) {
+        buildIf(script,specifyParams);
+        return buildParams(script,sourceDialect,specifyParams);
     }
-
-
-    /**
-     * 构建FOR语法
-     * @param script
-     * @param apiParams
-     */
-    public String buildFor(String script,ApiParams apiParams){
-        return null;
-    }
-
-    /**
-     * 查找开始截止位置，非递归或嵌套
-     * @param source
-     * @param beginToken
-     * @param endToken
-     */
-    public IndexScope buildIndexScope(StringBuilder source,String beginToken,String endToken){
-
-        Integer beginIndex = -1;
-        Integer endIndex = -1;
-        beginIndex = source.indexOf(beginToken);
-        if (beginIndex == -1){
-            return null;
-        }
-
-        endIndex = source.indexOf(endToken,beginIndex + beginToken.length());
-        if (endIndex == -1){
-            throw new IllegalArgumentException("missed "+beginToken+" close '"+endToken+"'");
-        }
-        IndexScope indexScope = new IndexScope();
-        indexScope.setBeginIndex(beginIndex);
-        indexScope.setEndIndex(endIndex+endToken.length()-1);
-        indexScope.setToken(source.substring(beginIndex,endIndex+endToken.length()));
-        return indexScope;
-    }
-
 
     /**
      * 构建IF语法
      * @param script
-     * @param apiParams
+     * @param specifyParams
      */
-    public void buildIf(StringBuilder script,ApiParams apiParams,Map<String,Object> specifyParams) {
+    public void buildIf(StringBuilder script,Map<String,Object> specifyParams) {
         String flag = "?{";
         //匹配参数#{}
         do{
@@ -187,16 +148,7 @@ public class ScriptParseService {
             }
             String condition = script.substring(startIf+flag.length(),ifSplitIndex);
 
-            Object value = null;
-            if (Pattern.matches("^\\w+$", condition)){
-                value = buildParamItem(apiParams,specifyParams,condition);
-            }else {
-                try {
-                    value = scriptParse.engineEval(condition, apiInfoContent.getEngineBindings());
-                }catch (Throwable throwable) {
-                    throw new RuntimeException(throwable);
-                }
-            }
+            Object value = buildContentScopeParamItem(specifyParams,condition);
 
             if (StringUtils.isEmpty(value) || (value instanceof Boolean && !(Boolean)value)){
                 script = script.replace(startIf,ifCloseIndex+1,"");
@@ -209,40 +161,177 @@ public class ScriptParseService {
     /**
      * 构建参数 #{}
      * @param script
-     * @param apiParams
+     * @param specifyParams
      */
-    public void buildParams(StringBuilder script, ApiParams apiParams,DataSourceDialect sourceDialect,Map<String,Object> specifyParams){
-        //匹配参数#{}
-        Pattern r = Pattern.compile("(#|\\$)\\{[A-Za-z0-9-\\[\\]_\\.]+\\}");
+    public Map<String,Object> buildParams(StringBuilder script,DataSourceDialect sourceDialect,Map<String,Object> specifyParams){
 
-        Matcher m = r.matcher(script);
+        Map<String,ScriptLanguageParam> paramKeys = new HashMap<>();
+
+        AtomicInteger atomicInteger = new AtomicInteger();
+
+        //匹配参数 :parameter
         int start = 0;
-        while (m.find(start)){
-            String group = m.group();
-            if (group.startsWith("#")){
-                String varName = group.replace("#{","").replace("}","");
-                Object value = buildParamItem(apiParams,specifyParams,varName);
-                String replaceValue = buildValue(value,sourceDialect);
+        Pattern pattern = Pattern.compile(":[a-z_\\-A-Z0-9]+");
+        Matcher parameterMatcher = pattern.matcher(script);
+        while (parameterMatcher.find(start)){
+            String replaceValue = parameterMatcher.group();
+
+            String parameter = buildParamKey(atomicInteger);
+            ScriptLanguageParam languageParam = ScriptLanguageParam.builder().scriptLanguage(replaceValue.substring(1)).build();
+            paramKeys.put(parameter,languageParam);
+
+            start = parameterMatcher.start() + replaceValue.length();
+        }
+
+
+        start = 0;
+        ConditionMatcher matcher = null;
+        //匹配参数#{}
+        while ((matcher = buildParamCondition(script,"#{",start)) != null){
+
+            ScriptLanguageParam languageParam = buildScriptLanguageParam(matcher.getCondition());
+            String parameter = buildParamKey(atomicInteger);
+            paramKeys.put(parameter,languageParam);
+
+            String replaceValue = null;
+            if (sourceDialect instanceof JdbcDataSource){
+                replaceValue = ":"+parameter;
+            }else{
+                Object value = buildContentScopeParamItem(specifyParams,languageParam.getScriptLanguage());
+                replaceValue = buildValue(value,sourceDialect);
                 if (replaceValue == null){
                     replaceValue = "null";
                 }
-                script = script.replace(m.start(),m.end(),replaceValue);
-                start = m.start() + replaceValue.length();
-            }else if(group.startsWith("$")){
-                String varName = group.replace("${","").replace("}","");
-                Object value = buildParamItem(apiParams,specifyParams,varName);
-                String replaceValue = buildSourceValue(value);
-                if (replaceValue == null){
-                    replaceValue = "null";
-                }
-                script = script.replace(m.start(),m.end(),replaceValue);
-                start = m.start() + replaceValue.length();
             }
 
+            script = script.replace(matcher.getStart(), matcher.getEnd()+1, replaceValue);
+
+            start = matcher.getStart() + replaceValue.length();
         }
+
+        start = 0;
+        //匹配参数${}
+        while ((matcher = buildParamCondition(script,"${",start)) != null){
+            Object value = buildContentScopeParamItem(specifyParams, matcher.getCondition());
+            String replaceValue = buildSourceValue(value);
+            if (replaceValue == null){
+                replaceValue = "null";
+            }
+
+            script = script.replace(matcher.getStart(), matcher.getEnd()+1, replaceValue);
+            start = matcher.getStart() + replaceValue.length();
+        }
+
+        //参数封装
+        Map<String,Object> params = new HashMap<>();
+        for (String parameter : paramKeys.keySet()){
+            ScriptLanguageParam languageParam = paramKeys.get(parameter);
+            Object value = buildContentScopeParamItem(specifyParams,languageParam.getScriptLanguage());
+
+            if (languageParam.getSqlType() != null){
+                params.put(parameter,new SqlParameterValue(languageParam.getSqlType(), value));
+            }else{
+                params.put(parameter,value);
+            }
+        }
+        return params;
     }
 
-    public Object buildParamItem(ApiParams apiParams,Map<String,Object> specifyParams, String varName) {
+    private String buildParamKey(AtomicInteger atomicInteger) {
+        return "param"+atomicInteger.getAndIncrement();
+    }
+
+    private ScriptLanguageParam buildScriptLanguageParam(String condition) {
+        Integer sqlType = null;
+        String scriptLanguage = null;
+
+        Matcher matcher = sqlTypePattern.matcher(condition);
+        if (matcher.find()){
+            String typeFieldName = matcher.group().substring(1).trim();
+            try {
+                Field field = Types.class.getField(typeFieldName);
+                field.setAccessible(true);
+                sqlType = (Integer) field.get(null);
+            }catch (Exception e){
+                throw new IllegalArgumentException("NoSuchField java.sql.Types."+typeFieldName+"");
+            }
+
+            scriptLanguage = condition.substring(0, matcher.start());
+        }else{
+            scriptLanguage = condition;
+        }
+
+        return ScriptLanguageParam.builder()
+                .sqlType(sqlType)
+                .scriptLanguage(scriptLanguage)
+                .build();
+    }
+
+    private ConditionMatcher buildParamCondition(StringBuilder script, String flag,int start){
+
+        int startIf = script.indexOf(flag,start);
+
+        if (startIf == -1) {
+            return null;
+        }
+
+        int ifCloseIndex = -1;
+        int quotationMark = 0;
+        int bigBracket = 1;
+
+        for(int i=startIf+flag.length();i<script.length();i++){
+            char c = script.charAt(i);
+
+            if (quotationMark > 0){
+                if (c == '\\') {
+                    i++;
+                    continue;
+                }
+                if (c == '"'){
+                    quotationMark --;
+                }
+                continue;
+            }
+
+            if (c == '"'){
+                quotationMark ++;
+                continue;
+            }
+
+
+            if (c == '{'){
+                bigBracket ++ ;
+            }
+
+            if (c == '}'){
+                bigBracket -- ;
+            }
+
+            if (c == '}' && bigBracket == 0){
+                ifCloseIndex = i;
+                break;
+            }
+        }
+
+        if (ifCloseIndex == -1){
+            throw new IllegalArgumentException("missed if close '}'");
+        }
+
+        return ConditionMatcher.builder()
+                .condition(script.substring(startIf+flag.length(),ifCloseIndex))
+                .start(startIf)
+                .end(ifCloseIndex)
+                .build();
+    }
+
+    /**
+     * 构建获取请求域中的参数
+     * @param apiParams
+     * @param specifyParams
+     * @param varName
+     * @return
+     */
+    public Object buildRequestScopeParamItem(ApiParams apiParams,Map<String,Object> specifyParams, String varName){
         String[] paramArr = varName.split("\\.");
 
         if (specifyParams != null){
@@ -252,13 +341,12 @@ public class ScriptParseService {
         Object value = null;
         if (scopeSet.contains(paramArr[0])){
             switch (ParamScope.valueOf(paramArr[0])){
-                case content:value = buildValueOfScriptContent(apiInfoContent.getEngineBindings() == null?null:apiInfoContent.getEngineBindings(),paramArr,1);break;
-                case pathVar:value = buildValueOfPathVar(apiParams.getPathVar(),paramArr[1]);break;
-                case param:value = buildValueOfParameter(apiParams.getParam(),paramArr,1);break;
-                case body:value = buildValueOfBody(apiParams.getBody(),paramArr,1);break;
-                case cookie:value = buildValueOfCookie(apiParams.getCookie(),apiParams.getRequest(),paramArr,1);break;
-                case header:value = buildValueOfHeader(apiParams.getHeader(),paramArr,1);break;
-                case session:value = buildValueOfSession(apiParams.getSession(),paramArr,1);break;
+                case _pathVar:value = buildValueOfPathVar(apiParams.getPathVar(),paramArr[1]);break;
+                case _param:value = buildValueOfParameter(apiParams.getParam(),paramArr,1);break;
+                case _body:value = buildValueOfBody(apiParams.getBody(),paramArr,1);break;
+                case _cookie:value = buildValueOfCookie(apiParams.getCookie(),apiParams.getRequest(),paramArr,1);break;
+                case _header:value = buildValueOfHeader(apiParams.getHeader(),paramArr,1);break;
+                case _session:value = buildValueOfSession(apiParams.getSession(),paramArr,1);break;
             }
         }else {
             value = buildValueOfScriptContent(apiInfoContent.getEngineBindings() == null?null:apiInfoContent.getEngineBindings(),paramArr,0);
@@ -284,13 +372,29 @@ public class ScriptParseService {
         return value;
     }
 
+    /**
+     * 构建上下文域中参数 (通过脚本引擎自动构建)
+     * @param specifyParams
+     * @param scriptLanguage
+     * @return
+     */
+    public Object buildContentScopeParamItem(Map<String,Object> specifyParams, String scriptLanguage) {
+        Bindings bindings = specifyParams!= null?new SimpleBindings(specifyParams):apiInfoContent.getEngineBindings();
+        try{
+            //变量与脚本提取区分
+            if (Pattern.matches("^\\w+$", scriptLanguage)){
+                return bindings.get(scriptLanguage);
+            }else {
+                return scriptParse.engineEval(scriptLanguage,bindings);
+            }
+        }catch (Throwable e){
+            throw new IllegalArgumentException(e.getMessage());
+        }
+    }
+
     private Object buildValueOfScriptContent(Bindings bindings, String[] paramArr, int index) {
         if (bindings == null)return null;
-        Object value = bindings.get(paramArr[index]);
-        if (paramArr.length-1 > index) {
-            return buildObjectValue(value, paramArr, index + 1, paramArr[index + 1]);
-        }
-        return value;
+        return buildObjectValue(bindings,paramArr,index,paramArr[index]);
     }
 
     public Object buildValueOfSession(Map<String,Object> session,String[] paramArr,int index) {
@@ -370,6 +474,9 @@ public class ScriptParseService {
         ArrVar arrVar = isArrVar(varName);
         if (arrVar != null){
             Object collection = params.get(arrVar.getVarName());
+            if (collection == null){
+                throw new IllegalArgumentException("The "+arrVar.getVarName()+" parameter is null");
+            }
             if (!(collection instanceof Collection)){
                 throw new IllegalArgumentException("The "+arrVar.getVarName()+" parameter is not an array");
             }
@@ -405,17 +512,22 @@ public class ScriptParseService {
 
     private String buildSourceValue(Object val) {
         if (val == null)return null;
+        return val.toString();
+    }
+
+    public String buildValue(Object val,DataSourceDialect sourceDialect) {
+        if (val == null)return null;
         StringBuilder valStr = new StringBuilder();
         if (val instanceof Collection){
-            valStr.append(((Collection)val).stream().map(item->item.toString()).collect(Collectors.joining(",")));
+            valStr.append(((Collection)val).stream().map(item->buildStrValue(item,sourceDialect)).collect(Collectors.joining(",")));
         }else {
-            valStr.append(val);
+            valStr.append(buildStrValue(val,sourceDialect));
         }
         return valStr.toString();
     }
 
-    private String buildValue(Object val,DataSourceDialect sourceDialect) {
-        if (val == null)return null;
+    public String buildFormatValue(Object val,DataSourceDialect sourceDialect) {
+        if (val == null)return "null";
         StringBuilder valStr = new StringBuilder();
         if (val instanceof Collection){
             valStr.append(((Collection)val).stream().map(item->buildStrValue(item,sourceDialect)).collect(Collectors.joining(",")));
@@ -428,6 +540,9 @@ public class ScriptParseService {
     private String buildStrValue(Object val, DataSourceDialect sourceDialect){
         if (val == null)return null;
         if (val instanceof Number){
+            return val.toString();
+        }
+        if (val instanceof Boolean){
             return val.toString();
         }
         return "'"+transcoding(val.toString(),sourceDialect)+"'";

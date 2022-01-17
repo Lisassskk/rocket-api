@@ -5,6 +5,7 @@ import com.github.alenfive.rocketapi.config.QLRequestMappingFactory;
 import com.github.alenfive.rocketapi.config.RocketApiProperties;
 import com.github.alenfive.rocketapi.entity.ApiResult;
 import com.github.alenfive.rocketapi.entity.vo.AcceptApiInfoSyncReq;
+import com.github.alenfive.rocketapi.service.ApiInfoService;
 import com.github.alenfive.rocketapi.utils.SignUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +34,9 @@ public class RemoteController {
 
     @Autowired
     private RocketApiProperties rocketApiProperties;
+
+    @Autowired
+    private ApiInfoService apiInfoService;
 
     /**
      * 接收远程同步过来的API INFO信息
@@ -63,14 +67,15 @@ public class RemoteController {
             return ApiResult.fail("Signature abnormal");
         }
         try {
-            Object result = mappingFactory.apiInfoSync(syncReq.getDirectories(),syncReq.getApiInfos(),syncReq.getIncrement() == 1);
+            Object result = apiInfoService.apiInfoSync(syncReq.getDirectories(),syncReq.getApiInfos(),syncReq.getIncrement() == 1);
+
             //刷新缓存
-            mappingFactory.getPathList(true);
+            apiInfoService.reLoadApiInfo(false);
+
             return ApiResult.success(result);
         }catch (Exception e){
             e.printStackTrace();
             return ApiResult.fail(e.getMessage());
         }
-
     }
 }

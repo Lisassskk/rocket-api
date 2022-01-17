@@ -40,6 +40,10 @@ let completionClazzUrl = baseUrl + "/completion-clazz";
 //远程同步
 let remoteSyncUrl = baseUrl + "/remote-sync";
 
+//导出,导入
+let exportUrl = baseUrl + "/export";
+let importUrl = baseUrl + "/import";
+
 //登录操作
 let loginUrl = baseUrl + "/login";
 let logoutUrl = baseUrl + "/logout";
@@ -48,11 +52,19 @@ let logoutUrl = baseUrl + "/logout";
 let getApiConfigUrl = baseUrl + "/api-config";
 let saveApiConfigUrl = baseUrl + "/api-config";
 
+//数据源操作
+let getDBConfigListUrl = baseUrl + "/db-config/list"
+let saveDBConfigUrl = baseUrl + "/db-config";
+let removeDBConfigUrl = baseUrl + "/db-config";
+let getDBDriverListUrl = baseUrl + "/db-driver/list"
+let testConnectUrl = baseUrl + "/db-test";
+
 //目录操作
 let directoryListUrl = baseUrl + "/directory/list";
 let saveDirectoryUrl = baseUrl + "/directory";
 let deleteDirectoryUrl = baseUrl + "/directory";
 
+let checkVersionUrl = baseUrl + "/check-version";
 
 let editor = "admin";
 
@@ -147,10 +159,12 @@ function initPanel() {
 
 //版本检测
 function versionCheck() {
-    let url = "https://img.shields.io/maven-central/v/com.github.alenfive/rocket-api-boot-starter.json";
-    $.getJSON(url,function (data) {
-        $("#top-section .center-version").show();
-        $("#top-section .center-version span").text(data.value);
+    $.getJSON(checkVersionUrl,function (data) {
+        data = unpackResult(data);
+        if (data.data && data.data.value){
+            $("#top-section .center-version").show();
+            $("#top-section .center-version span").text(data.data.value);
+        }
     });
 }
 
@@ -312,23 +326,23 @@ function loadKeyCodeEvent() {
     });
 }
 
-function loadRemoteSyncChecboxEvent() {
+function loadRemoteSyncChecboxEvent(target) {
 
     //隐藏
-    $("#remote-sync").on("click",".level1 .icon-caret-down",function () {
+    $(target).on("click",".level1 .icon-caret-down",function () {
         $(this).parents(".level1").find(">ul").hide();
         $(this).removeClass("icon-caret-down").addClass("icon-caret-right");
         return false;
     })
 
-    $("#remote-sync").on("click",".level1 .icon-caret-right",function () {
+    $(target).on("click",".level1 .icon-caret-right",function () {
         $(this).parents(".level1").find(">ul").show();
         $(this).removeClass("icon-caret-right").addClass("icon-caret-down");
         return false;
     })
 
     //根节点
-    $("#remote-sync").on("click",".level0>.tree-entry input:checkbox",function (e) {
+    $(target).on("click",".level0>.tree-entry input:checkbox",function (e) {
         let isChecked = $(this).prop('checked');
         if (isChecked){
             $(this).parents(".level0").find(".level1 .tree-entry input:checkbox").prop("checked","checked");
@@ -336,32 +350,32 @@ function loadRemoteSyncChecboxEvent() {
             $(this).parents(".level0").find(".level1 .tree-entry input:checkbox").prop("checked","");
         }
 
-        $("#remote-sync .items-count").text($("#remote-sync .level2>.tree-entry input:checkbox:checked").length+" item selected");
+        $(target + " .items-count").text($(target + " .level2>.tree-entry input:checkbox:checked").length+" item selected");
     });
 
     //二级节点
-    $("#remote-sync ").on("click",".level1>.tree-entry input:checkbox",function (e) {
+    $(target).on("click",".level1>.tree-entry input:checkbox",function (e) {
         let isChecked = $(this).prop('checked');
         if (isChecked){
             $(this).parents(".level1").find(".level2 .tree-entry input:checkbox").prop("checked","checked");
         }else{
             $(this).parents(".level1").find(".level2 .tree-entry input:checkbox").prop("checked","");
         }
-        let checkedNum = $("#remote-sync .level1>.tree-entry input:checkbox:checked").length;
+        let checkedNum = $(target + " .level1>.tree-entry input:checkbox:checked").length;
         if (checkedNum == 0){
-            $("#remote-sync .level0>.tree-entry input:checkbox").prop("checked","");
+            $(target + " .level0>.tree-entry input:checkbox").prop("checked","");
         }else {
-            $("#remote-sync .level0>.tree-entry input:checkbox").prop("checked","checked");
+            $(target + " .level0>.tree-entry input:checkbox").prop("checked","checked");
         }
-        $("#remote-sync .items-count").text($("#remote-sync .level2>.tree-entry input:checkbox:checked").length+" item selected");
+        $(target + " .items-count").text($(target + " .level2>.tree-entry input:checkbox:checked").length+" item selected");
     });
 
-    $("#remote-sync").on("click",".btn-link",function (e) {
+    $(target).on("click",".btn-link",function (e) {
         $(this).parent().find("input:checkbox").click();
     })
 
     //三级节点
-    $("#remote-sync ").on("click",".level2>.tree-entry input:checkbox",function (e) {
+    $(target).on("click",".level2>.tree-entry input:checkbox",function (e) {
         let checked2Num = $(this).parents(".level1").find(".level2>.tree-entry input:checkbox:checked").length;
         if (checked2Num == 0){
             $(this).parents(".level1").find(">.tree-entry input:checkbox").prop("checked","");
@@ -369,13 +383,13 @@ function loadRemoteSyncChecboxEvent() {
             $(this).parents(".level1").find(">.tree-entry input:checkbox").prop("checked","checked");
         }
 
-        let checkedNum = $("#remote-sync .level1>.tree-entry input:checkbox:checked").length;
+        let checkedNum = $(target + " .level1>.tree-entry input:checkbox:checked").length;
         if (checkedNum == 0){
-            $("#remote-sync .level0>.tree-entry input:checkbox").prop("checked","");
+            $(target + " .level0>.tree-entry input:checkbox").prop("checked","");
         }else{
-            $("#remote-sync .level0>.tree-entry input:checkbox").prop("checked","checked");
+            $(target + " .level0>.tree-entry input:checkbox").prop("checked","checked");
         }
-        $("#remote-sync .items-count").text($("#remote-sync .level2>.tree-entry input:checkbox:checked").length+" item selected");
+        $(target + " .items-count").text($(target + " .level2>.tree-entry input:checkbox:checked").length+" item selected");
     });
 }
 
@@ -387,7 +401,8 @@ function loadEvent() {
     loadHistoryScrollEvent();
     loadLeftSideEvent();
     loadBottomSideEvent();
-    loadRemoteSyncChecboxEvent()
+    loadRemoteSyncChecboxEvent("#remote-sync")
+    loadRemoteSyncChecboxEvent("#export-dialog")
     loadKeyCodeEvent()
 }
 
@@ -519,9 +534,7 @@ function runApi(debug) {
         url: runApiUrl,
         contentType : "application/json",
         data: JSON.stringify(params),
-        dataType:"text",
         success: function (data) {
-            data = JSON.parse(data.replace(/:s*([0-9]{15,})s*(,?)/g, ': "$1" $2'));
             data = unpackResult(data);
             let content = "";
             if (data.data && data.data.logs){
@@ -551,9 +564,11 @@ function runApi(debug) {
     });
 
     if (debug){
-        MtaH5.clickStat("debug_count")
+        let tokenStr = "DEBUG次数";
+        _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
     }else {
-        MtaH5.clickStat("run_count")
+        let tokenStr = "RUN次数";
+        _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
     }
 }
 
@@ -944,9 +959,11 @@ function saveExecuter(params) {
             });
 
             if (params.id){
-                MtaH5.clickStat("api_save_success")
+                let tokenStr = "API保存次数";
+                _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
             }else{
-                MtaH5.clickStat("api_new_success")
+                let tokenStr = "API新增次数";
+                _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
             }
 
         },complete:function (req,data) {
@@ -962,7 +979,21 @@ function saveExecuter(params) {
 
 function searchApi(e) {
     let keyword = $(e).val().trim();
-    let searchResult = [];
+    let searchResult = searchKeyword(keyword);
+    buildApiTree(searchResult.dirList,searchResult.apiList,keyword?"":"collapsed");
+}
+
+function searchKeyword(keyword) {
+
+    if (!keyword){
+        return {
+            "apiList":gdata.apiList,
+            "dirList":gdata.directoryList
+        }
+    }
+
+    //api搜索
+    let searchApiResult = [];
     $.each(gdata.apiList,function (index,item) {
         if (keyword.split("=").length == 2){
             if (!item.options){
@@ -971,13 +1002,77 @@ function searchApi(e) {
             let kv = keyword.split("=");
             let options = JSON.parse(item.options);
             if (options[kv[0]] == kv[1]){
-                searchResult.push(item);
+                searchApiResult.push(item);
             }
-        }else if (item.name.indexOf(keyword) >=0 || item.fullPath.indexOf(keyword)>=0 || !keyword){
-            searchResult.push(item);
+        }else if (item.name.indexOf(keyword) >=0){
+            let newItem = $.extend({},item);
+            newItem.name = newItem.name.replace(keyword,'<span class="s_match">'+keyword+'</span>')
+            searchApiResult.push(newItem);
+        }else if(item.path.indexOf(keyword)>=0){
+            let newItem = $.extend({},item);
+            newItem.path = newItem.path.replace(keyword,'<span class="s_match">'+keyword+'</span>')
+            searchApiResult.push(newItem);
+        }else if(item.script.indexOf(keyword)>=0){
+            let newItem = $.extend({},item);
+            newItem.script = newItem.script.replace(keyword,'<span class="s_match">'+keyword+'</span>')
+            searchApiResult.push(newItem);
         }
     });
-    buildApiTree(gdata.directoryList,searchResult,keyword?"":"collapsed");
+
+    //directory搜索
+    let dirMap = new Map();
+    let apiMap = new Map();
+
+    //搜索API上级目录
+    $.each(searchApiResult,function (index,item){
+        searchParentDir(dirMap,item.directoryId)
+
+        //搜索结果优先
+        apiMap.set(item.id,item);
+    });
+
+    //搜索匹配的目录
+    let searchDirectoryResult = [];
+    $.each(gdata.directoryList,function (index,item) {
+        if (item.name.indexOf(keyword) >=0 ){
+            let newItem = $.extend({},item);
+            newItem.name = newItem.name.replace(keyword,'<span class="s_match">'+keyword+'</span>')
+            searchDirectoryResult.push(newItem);
+        }else if(item.path && item.path.indexOf(keyword)>=0){
+            let newItem = $.extend({},item);
+            newItem.path = newItem.path.replace(keyword,'<span class="s_match">'+keyword+'</span>')
+            searchDirectoryResult.push(newItem);
+        }
+    })
+
+    //搜索匹配目录的上级目录，下级目录，当前目录和下级目录的接口
+    $.each(searchDirectoryResult,function (index,item) {
+
+        //搜索上级目录
+        searchParentDir(dirMap,item.id)
+
+        //搜索下级目录和接口
+        searchChildDirOrApi(dirMap,apiMap,item.id)
+
+        //搜索结果优先
+        dirMap.set(item.id,item);
+    })
+
+    let apiList = [];
+    let dirList = [];
+
+    for(let item of dirMap) {
+        dirList.push(item[1]);
+    }
+
+    for(let item of apiMap) {
+        apiList.push(item[1]);
+    }
+
+    return {
+        "apiList":apiList,
+        "dirList":dirList
+    }
 }
 
 function buildApiDom(item) {
@@ -1176,13 +1271,14 @@ function loadExampleById(exampleId) {
 
 function loadExample(apiInfo,example) {
 
+
     let $form = $("#example-section");
     $form.find(".save-example-btn .changes-indicator").remove();
 
     //------构建example
     currExample = $.extend({
         apiInfoId:apiInfo.id,
-        url:buildDefaultUrl(apiInfo.path),
+        url:buildDefaultUrl(apiInfo.fullPath),
         method:apiInfo.method,
         requestHeader:"{}",
         requestBody:"",
@@ -1192,6 +1288,8 @@ function loadExample(apiInfo,example) {
         elapsedTime:0,
         options:"{}"
     },example);
+
+    currExample.method = apiInfo.method;
     $form.find(".example-method").val(currExample.method);
     let url = buildDefaultUrl(apiInfo.fullPath);
     if(currExample.url.indexOf("?") !=-1){
@@ -1209,7 +1307,7 @@ function loadExample(apiInfo,example) {
     switchExampleMethod(currExample.method);
 
     //请求体
-    exampleTextarea.setValue(currExample.requestBody);
+    exampleTextarea.setValue(currExample.requestBody?currExample.requestBody:'{}');
     formatExample();
     //响应状态码
     buildResponseStatus(currExample.status);
@@ -1302,7 +1400,8 @@ function saveExample(id) {
         }
     });
 
-    MtaH5.clickStat("example_save")
+    let tokenStr = "POSTMAN保存次数";
+    _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
 }
 function requextUrlExample(ableRedirect) {
     let $form = $("#example-section");
@@ -1781,6 +1880,10 @@ function logout() {
             localStorage.setItem("rocketUser",JSON.stringify(rocketUser));
             $("#top-section .login-btn").show();
             $("#top-section .login-info").hide();
+
+            let tokenStr = "登出次数";
+            _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
+
         },complete:function (req,data) {
             hideSendNotify();
         }
@@ -1816,6 +1919,10 @@ function login() {
             $("#top-section .login-info").show();
             $("#top-section .login-info .name").text(rocketUser.user.username);
             hideLoginDialog();
+
+            let tokenStr = "登录次数";
+            _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
+
         },complete:function (req,data) {
             hideSendNotify();
         }
@@ -2049,6 +2156,9 @@ function acceptLeft() {
 function confirmDiff() {
     cancelDiff();
     editorTextarea.setValue(modifiedModel.getValue());
+
+    let tokenStr = "版本比对确认次数";
+    _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
 }
 function cancelDiff() {
     $("#editor-section .diff-body").hide();
@@ -2219,8 +2329,375 @@ function saveGlobalConfig() {
 }
 //-------------------------------- global setting end -------------------------------
 
-//-------------------------------- datasource setting start -------------------------------
-function showDataSourceConfig() {
+//-------------------------------- datasource setting start -----------------------
+function showDataSourceConfig(){
+    $("#datasource-setting").show();
+    showSendNotify("load Setting")
+    $.ajax({
+        type: "GET",
+        url: getDBDriverListUrl,
+        success: function (data) {
+            data = unpackResult(data);
+            if (data.code !=200){
+                openMsgModal(data.msg);
+                return;
+            }
+            gdata.driverList = data.data;
+            fillDriverSelect(data.data);
+            loadDbConfigList()
+        },complete:function () {
+            hideSendNotify();
+        }
+    });
+}
+
+
+function hideDataSourceConfig(){
+    $("#datasource-setting").hide();
+}
+
+
+
+function loadDbConfigList(selectDBId) {
+    $.ajax({
+        type: "GET",
+        url: getDBConfigListUrl,
+        success: function (data) {
+            data = unpackResult(data);
+            if (data.code !=200){
+                openMsgModal(data.msg);
+                return;
+            }
+            gdata.dbList = data.data;
+            fillDBList(data.data,selectDBId);
+        },complete:function () {
+            hideSendNotify();
+        }
+    });
+}
+
+function fillDBList(dbList,selectDBId) {
+    $(".db-list").html('');
+
+
+    $.each(dbList,function(index,item){
+        let driverObj = getDriver(item.driver);
+        $(".db-list").append('<div data="'+item.id+'" onclick="selectDB(this)"><img src="'+driverObj.icon+'" >'+item.name+'</div>')
+    })
+
+    if (dbList.length == 0){
+        $(".db-list").html('<div><span style="color:gray;cursor: auto;">Empty</span></div>');
+    }else{
+        let selectedTarget = null;
+        if (!selectDBId){
+            selectedTarget = $(".db-list>div:first");
+        }else{
+            selectedTarget = $(".db-list>div[data='"+selectDBId+"']");
+        }
+        selectDB(selectedTarget)
+    }
+
+}
+
+function selectDB(target) {
+    $(".db-list>div").removeClass("db-selected")
+    $(target).addClass("db-selected");
+    let dbId = $(target).attr("data");
+    //show db details
+    $(".db-right>div").show();
+
+    let dbObj = getDB(dbId);
+    let driver = getDriver(dbObj.driver);
+    $(".db-right input[name='id']").val(dbObj.id);
+    $(".db-right input[name='name']").val(dbObj.name);
+    $(".db-right input[name='comment']").val(dbObj.comment);
+    $(".db-right input[name='user']").val(dbObj.user);
+    $(".db-right input[name='password']").val(dbObj.password);
+    $(".db-right input[name='url']").val(dbObj.url);
+    $(".db-right input[name='driver']").val(dbObj.driver);
+    $(".db-right .db-driver-info").attr("title",dbObj.driver);
+
+    $(".db-right .db-driver-icon>img").attr("src",driver.icon);
+    $(".db-right .db-driver-info").text(driver.name);
+
+    testConnectStatus();
+
+    //填充options
+    $(".db-right .db-properties").html("")
+    if (dbObj.properties){
+        $.each(dbObj.properties,function (key,value){
+            generateDBLine(key,value)
+        })
+    }
+    generateDBLine('','')
+}
+
+function generateDBLine(key,value) {
+    let domStr = '<div class="db-properties-line">\n' +
+        '                    <div class="controls" >\n' +
+        '                        <input type="text" class="gwt-TextBox input-xlarge" onblur="checkLine(this)" name="key" value="'+key+'" >\n' +
+        '                    </div>\n' +
+        '                    <div class="controls">\n' +
+        '                        <input type="text" class="gwt-TextBox input-xlarge" onblur="checkLine(this)" name="value" value="'+value+'" >\n' +
+        '                    </div>\n' +
+        '                </div>';
+    $(".db-right .db-properties").append(domStr);
+}
+
+function checkLine(target) {
+    let lineDom = $(target).parents(".db-properties-line");
+    let key = lineDom.find("input[name='key']").val().trim();
+    let value = lineDom.find("input[name='value']").val().trim();
+    if (key != '' || value != ''){
+        lineDom.addClass("has-value");
+    }else{
+        lineDom.removeClass("has-value");
+
+        //移除非最后一个元素
+        if (lineDom.next().length > 0){
+            lineDom.remove();
+        }
+
+    }
+    if ($(".db-properties .db-properties-line:last").hasClass("has-value")){
+        generateDBLine('','')
+    }
+}
+
+function testConnectStatus(status){
+    let loadClass = "fa-spinner fa-spin";
+    let okClass = "fa-check";
+    let errClass = "fa-times";
+    $(".db-connection-status").removeClass(loadClass);
+    $(".db-connection-status").removeClass(okClass);
+    $(".db-connection-status").removeClass(errClass);
+    if (!status){
+        return;
+    }
+    switch (status){
+        case "none":break;
+        case "load":$(".db-connection-status").addClass(loadClass);break;
+        case "ok":$(".db-connection-status").addClass(okClass);break;
+        case "err":$(".db-connection-status").addClass(errClass);break;
+    }
+
+}
+
+function testConnect() {
+
+    testConnectStatus("load");
+
+    let params = buildDBConfigParams();
+    $.ajax({
+        type: "POST",
+        url: testConnectUrl,
+        contentType : "application/json",
+        data: JSON.stringify(params),
+        success: function (data) {
+            data = unpackResult(data);
+            if (data.code !=200){
+                testConnectStatus("err");
+                openMsgModal(data.msg);
+                return;
+            }
+            testConnectStatus("ok");
+        },complete:function () {
+            hideSendNotify();
+        }
+    });
+}
+
+function buildDBConfigParams(){
+    let dbRight = $(".db-right");
+    let params = {
+        "id": dbRight.find("input[name='id']").val(),
+        "name": dbRight.find("input[name='name']").val(),
+        "comment":dbRight.find("input[name='comment']").val(),
+        "user":dbRight.find("input[name='user']").val(),
+        "password":dbRight.find("input[name='password']").val(),
+        "url":dbRight.find("input[name='url']").val(),
+        "driver":dbRight.find("input[name='driver']").val()
+    }
+    let properties = {};
+    params["properties"] = properties;
+
+    let lines = dbRight.find(".db-properties-line");
+    $.each(lines,function (index,item){
+        let key = $(item).find("input[name='key']").val().trim();
+        let value = $(item).find("input[name='value']").val().trim();
+        if (key == ''){
+            return;
+        }
+        properties[key] = value;
+    })
+
+    return params;
+}
+
+function getDB(dbId) {
+    let dbObj = null;
+    $.each(gdata.dbList,function (index,item) {
+        if (item.id == dbId){
+            dbObj = item;
+            return false;
+        }
+    })
+    return dbObj;
+}
+
+function getDriver(driver){
+    let driverObj = {};
+    $.each(gdata.driverList,function (index,item) {
+        if (item.driver == driver){
+            driverObj = item;
+            return false;
+        }
+    })
+    return driverObj;
+}
+
+function fillDriverSelect(data) {
+    $(".db-driver").html("")
+    $.each(data,function(index,item){
+        $(".db-driver").append('<li class="dropdown-item" onclick="addNewDB(this)" data="'+item.driver+'"><a><img src="'+item.icon+'" ><span class="gwt-InlineHTML">'+item.name+'</span></a></li>')
+    })
+    $(".db-driver").append('<li class="dropdown-item" style="border-top: 1px solid #e0dada;"><a target="_blank" href="https://alenfive.gitbook.io/rocket-api/zi-ding-yi-kuo-zhan/zi-ding-yi-dong-tai-shu-ju-yuan-qu-dong-kuo-zhan">自定义驱动</a></li>')
+
+
+}
+
+function addNewDB(target) {
+    let driver = $(target).attr("data");
+    let driverObj = getDriver(driver);
+
+
+    let params = {
+        "driver":driver,
+        "name":generateDBName("@localhost"),
+        "url": driverObj.format,
+        "enabled":false
+    };
+
+    saveDB(params)
+
+}
+
+function saveDB(params,closeDialog) {
+    $.ajax({
+        type: "POST",
+        url: saveDBConfigUrl,
+        contentType : "application/json",
+        data: JSON.stringify(params),
+        success: function (data) {
+            data = unpackResult(data);
+            if (data.code !=200){
+                openMsgModal(data.msg);
+                return;
+            }
+
+            if (params.id){
+                let tokenStr = "数据源保存次数";
+                _czc.push(["_trackEvent",tokenStr,params.driver,params.name,"1",tokenStr])
+            }else{
+                let tokenStr = "数据源新增次数";
+                _czc.push(["_trackEvent",tokenStr,params.driver,params.name,"1",tokenStr])
+            }
+
+            if (closeDialog){
+                hideDataSourceConfig();
+            }else{
+                loadDbConfigList(data.data);
+            }
+        },complete:function () {
+            hideSendNotify();
+        }
+    });
+}
+
+function removeDB() {
+    let id = $(".db-selected").attr("data");
+    if (!id){
+        return;
+    }
+    let params = {
+        "id":id
+    }
+    $.ajax({
+        type: "DELETE",
+        url: removeDBConfigUrl,
+        contentType : "application/json",
+        data: JSON.stringify(params),
+        success: function (data) {
+            data = unpackResult(data);
+            if (data.code !=200){
+                openMsgModal(data.msg);
+                return;
+            }
+            loadDbConfigList();
+        },complete:function () {
+            hideSendNotify();
+        }
+    });
+}
+
+function generateDBName(name){
+
+    let reg = new RegExp("( \[[0-9]+\])$","g")
+    name = name.replace(reg,"");
+
+    let startStr = name +" [";
+    let endStr = "]";
+    let nameNum = null;
+    $.each(gdata.dbList,function (index,item){
+
+        if(!item.name.startsWith(startStr) || !item.name.endsWith(endStr)){
+            return;
+        }
+        let num = item.name.substring(startStr.length,item.name.length-1);
+
+        try {
+            num = parseInt(num);
+        }catch (e) {
+            return;
+        }
+        if (nameNum < num){
+            nameNum = num;
+        }
+    })
+
+    name = nameNum?(name+" ["+(nameNum+1)+"]"):(name+" [1]")
+    return name;
+}
+
+function copyDB(){
+    let id = $(".db-selected").attr("data");
+    if (!id){
+        return;
+    }
+    let targetDB = null;
+    $.each(gdata.dbList,function (index,item){
+        if (item.id == id){
+            targetDB = item;
+            return false;
+        }
+    })
+    let newDB = jQuery.extend({}, targetDB);
+    newDB.id = null;
+    newDB.name = generateDBName(targetDB.name);
+    saveDB(newDB)
+}
+
+function saveDataSourceConfig(closeDialog) {
+    let params = buildDBConfigParams();
+    params.enabled = true;
+    saveDB(params,closeDialog);
+
+}
+
+//-------------------------------- datasource setting end -------------------------
+
+//-------------------------------- yml setting start -------------------------------
+function showYmlConfig() {
 
     showSendNotify("load Setting")
     $.ajax({
@@ -2232,19 +2709,19 @@ function showDataSourceConfig() {
                 openMsgModal(data.msg);
                 return;
             }
-            showDataSourceConfigView(data.data);
+            showYmlConfigView(data.data);
         },complete:function () {
             hideSendNotify();
         }
     });
 }
 
-function showDataSourceConfigView(data) {
-    $("#datasource-setting").show();
-    $("#datasource-setting .modal-body").html("");
-    apiSettingTextarea = monaco.editor.create($("#datasource-setting .modal-body")[0], {
+function showYmlConfigView(data) {
+    $("#yml-setting").show();
+    $("#yml-setting .modal-body").html("");
+    apiSettingTextarea = monaco.editor.create($("#yml-setting .modal-body")[0], {
         language: 'yaml',
-        value:data?data.configContext:"",
+        value:data&&data.configContext?data.configContext:"#1.等价于springboot application.yml,yaml格式 优先级最高\n#2.可以在脚本中使用env.get(\"config.hello\")获取配置项\n#3.当前配置文件中的描述内容只在首次未配置时显示，注意删除他们\n\nconfig.hello: word",
         /*verticalHasArrows: true,
         horizontalHasArrows: true,*/
         scrollBeyondLastLine: false,
@@ -2257,11 +2734,11 @@ function showDataSourceConfigView(data) {
     });
 }
 
-function hideDataSourceConfig() {
-    $("#datasource-setting").hide();
+function hideYmlConfig() {
+    $("#yml-setting").hide();
 }
 
-function saveDataSourceGlobalConfig() {
+function saveYmlGlobalConfig() {
     showSendNotify("Saving Setting")
     $.ajax({
         type: "post",
@@ -2274,13 +2751,17 @@ function saveDataSourceGlobalConfig() {
                 openMsgModal(data.msg);
                 return;
             }
-            hideDataSourceConfig();
+            hideYmlConfig();
+
+            let tokenStr = "YML保存次数";
+            _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
+
         },complete:function () {
             hideSendNotify();
         }
     });
 }
-//-------------------------------- datasource setting end -------------------------------
+//-------------------------------- yml setting end -------------------------------
 
 //-------------------------------- api push end -------------------------------
 function apiPush(apiInfoId) {
@@ -2325,10 +2806,88 @@ function buildMethodsForClazz(clazz) {
 //-------------------------------- api push end -------------------------------
 
 
+
+//-------------------------------- export start ------------------------------
+function showExport() {
+    $("#export-dialog").show();
+    buildSelectApiTree("#export-dialog",gdata.directoryList,gdata.apiList,"collapsed")
+    $("#export-dialog .filename").focus();
+}
+function hideExport(){
+    $("#export-dialog").hide();
+}
+function exportApiInfo(){
+
+    let fileName = $("#export-dialog .filename").val();
+
+    if (!fileName){
+        $("#export-dialog .error-message").text("filename is empty")
+        return;
+    }
+
+    let apiInfoIds = $("#export-dialog .level2 input:checkbox:checked");
+
+    if (apiInfoIds.length == 0){
+        $("#export-dialog .error-message").text("export is empty");
+        return;
+    }
+
+    let idsParams = [];
+    $.each(apiInfoIds,function () {
+        idsParams.push($(this).val());
+    })
+
+    $("#export-dialog .subform").attr("action",exportUrl);
+    $("#export-dialog input[name='apiInfoIds']").val(idsParams.join(","));
+    $("#export-dialog input[name='token']").val(rocketUser.user.token);
+    $("#export-dialog .subform").submit();
+    hideExport();
+
+    let tokenStr = "API导出次数";
+    _czc.push(["_trackEvent",tokenStr,fileName,tokenStr,apiInfoIds.length,tokenStr])
+}
+//-------------------------------- export end ------------------------------
+
+//-------------------------------- import start ------------------------------
+function showImport(){
+    $("#import-dialog").show();
+}
+function hideImport() {
+    $("#import-dialog").hide();
+}
+function importApi() {
+
+    $("#import-dialog .error-message").text("In process of import ... ")
+    $("#import-form").ajaxSubmit({
+        url: importUrl,
+        type:"POST",
+        dataType:"json",
+        success:function (data) {
+            data = unpackResult(data);
+
+            let tokenStr = "API导入次数";
+            _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
+
+            if (data.code !=200){
+                $("#import-dialog .error-message").text("import error:"+data.msg)
+                return;
+            }
+
+            $("#import-dialog .error-message").text("import successful size:"+data.data)
+
+            loadApiList(false,function(){
+
+            });
+        }
+    });
+
+}
+//-------------------------------- import end ------------------------------
+
 //-------------------------------- Remote Sync start ------------------------------
 function showRemoteSync() {
     $("#remote-sync").show();
-    buildSelectApiTree(gdata.apiList,"collapsed")
+    buildSelectApiTree("#remote-sync",gdata.directoryList,gdata.apiList,"collapsed")
 }
 
 function hideRemoteSync() {
@@ -2361,6 +2920,10 @@ function remoteSync(increment) {
                 openMsgModal(data.msg);
                 return;
             }
+
+            let tokenStr = "远程发布次数";
+            _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
+
             $("#remote-sync .error-message").text("Remote release successful size:"+data.data)
         },complete:function () {
             hideSendNotify();
@@ -2368,25 +2931,45 @@ function remoteSync(increment) {
     });
 }
 
-function searchSelectApi(e) {
+function searchSelectApi(target,e) {
     let keyword = $(e).val().trim();
-    let searchResult = [];
-    $.each(gdata.apiList,function (index,item) {
-        if (keyword.split("=").length == 2){
-            if (!item.options){
-                return;
-            }
-            let kv = keyword.split("=");
-            let options = JSON.parse(item.options);
-            if (options[kv[0]] == kv[1]){
-                searchResult.push(item);
-            }
-        }else if (item.name.indexOf(keyword) >=0 || item.fullPath.indexOf(keyword)>=0 || !keyword){
-            searchResult.push(item);
+
+    let searchResult = searchKeyword(keyword);
+    $(target + " .items-count").text("0 item selected");
+
+    buildSelectApiTree(target,searchResult.dirList,searchResult.apiList,keyword?"":"collapsed");
+}
+
+function searchChildDirOrApi(directoryMap,apiMap,directoryId){
+    $.each(gdata.directoryList,function (index, item) {
+          if (item.parentId == directoryId){
+              if (!directoryMap.get(item.id)){
+                  directoryMap.set(item.id,item);
+              }
+              searchChildDirOrApi(directoryMap,apiMap,item.id)
+          }
+    })
+
+    $.each(gdata.apiList,function (index,item){
+        if (item.directoryId == directoryId && !apiMap.get(item.id)){
+            apiMap.set(item.id,item);
         }
-    });
-    $("#remote-sync .items-count").text("0 item selected");
-    buildSelectApiTree(searchResult,keyword?"":"collapsed");
+    })
+}
+
+function searchParentDir(directoryMap,directoryId){
+    $.each(gdata.directoryList,function (index,item) {
+        if (item.id == directoryId){
+
+            if (!directoryMap.get(item.id)){
+                directoryMap.set(item.id,item);
+            }
+
+            if (item.parentId){
+                searchParentDir(directoryMap,item.parentId)
+            }
+        }
+    })
 }
 
 function buildApiSelectDirectoryDom(directory,collapsed) {
@@ -2401,36 +2984,35 @@ function buildApiSelectDirectoryDom(directory,collapsed) {
         '                <span class="gwt-InlineHTML node-text" >'+directory.name+'</span>\n' +
         '            </a>\n' +
         '        </div>\n' +
-        '<ul style="'+(collapsed?'display: none;':'display: block;')+'" id="directory-select-id-'+directory.id+'"></ul>' +
+        '<ul style="'+(collapsed?'display: none;':'display: block;')+'" class="directory-select-id-'+directory.id+'"></ul>' +
         '    </li>');
 }
 
-function buildSelectApiDirectory(directoryList,dirId,collapsed){
+function buildSelectApiDirectory(target,directoryList,dirId,collapsed){
     $.each(directoryList,function (index,item) {
 
         if (!dirId && !item.parentId){
-            $("#remote-sync .api-list-body").append(buildApiSelectDirectoryDom(item,collapsed));
-            buildSelectApiDirectory(directoryList,item.id,collapsed);
+            $(target + " .api-list-body").append(buildApiSelectDirectoryDom(item,collapsed));
+            buildSelectApiDirectory(target,directoryList,item.id,collapsed);
             return;
         }
 
         if (item.parentId != dirId){
             return;
         }
-        $("#directory-select-id-"+dirId).append(buildApiSelectDirectoryDom(item,collapsed));
-        buildSelectApiDirectory(directoryList,item.id,collapsed);
+        $(target + " .directory-select-id-"+dirId).append(buildApiSelectDirectoryDom(item,collapsed));
+        buildSelectApiDirectory(target,directoryList,item.id,collapsed);
     })
 }
 
-function buildSelectApiTree(list,collapsed) {
+function buildSelectApiTree(target,dirList,apiList,collapsed) {
 
-
-    $("#remote-sync .api-list-body").html("");
+    $(target +" .api-list-body").html("");
     //生成tree
-    buildSelectApiDirectory(gdata.directoryList,null,collapsed);
+    buildSelectApiDirectory(target,dirList,null,collapsed);
 
-    $.each(list,function (index,item) {
-        let _children = $("#directory-select-id-"+item.directoryId);
+    $.each(apiList,function (index,item) {
+        let _children = $(target + " .directory-select-id-"+item.directoryId);
         _children.append('  <li class="level2 request">\n' +
             '                <div class="tree-entry">\n' +
             '                    <label class="checkbox" >\n' +
@@ -2514,6 +3096,10 @@ function saveDirectory() {
                 collapsedDirectory(data.data);
             });
             cancelDialog('#directory-editor');
+
+            let tokenStr = "Directory创建次数";
+            _czc.push(["_trackEvent",tokenStr,name,tokenStr,"1",tokenStr])
+
         },complete:function () {
             hideSendNotify();
         }
@@ -2577,3 +3163,8 @@ function collapsedDirectory(parentId) {
     collapsedDirectory(parentId);
 }
 //-------------------------------- Directory Edit end ------------------------------
+
+function targetGo(tokenStr,url) {
+    _czc.push(["_trackEvent",tokenStr,tokenStr,tokenStr,"1",tokenStr])
+    window.open(url);
+}

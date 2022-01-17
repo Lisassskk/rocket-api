@@ -1,21 +1,22 @@
 package com.github.alenfive.rocketapi.function;
 
+import com.github.alenfive.rocketapi.datasource.DataSourceDialect;
 import com.github.alenfive.rocketapi.datasource.DataSourceManager;
 import com.github.alenfive.rocketapi.entity.vo.Page;
+import com.github.alenfive.rocketapi.entity.vo.ScriptContext;
 import com.github.alenfive.rocketapi.extend.ApiInfoContent;
 import com.github.alenfive.rocketapi.extend.IApiPager;
 import com.github.alenfive.rocketapi.extend.IDBCache;
 import com.github.alenfive.rocketapi.extend.ISQLInterceptor;
+import com.github.alenfive.rocketapi.service.ScriptParseService;
+import com.github.alenfive.rocketapi.utils.LogFormatUtils;
 import lombok.AllArgsConstructor;
-import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.CollectionUtils;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +36,9 @@ public class DbFunction implements IFunction {
     private ApiInfoContent apiInfoContent;
 
     @Autowired
+    private ScriptParseService parseService;
+
+    @Autowired
     private IApiPager apiPager;
 
     @Autowired
@@ -50,7 +54,7 @@ public class DbFunction implements IFunction {
     private Long cacheTime;
 
     public DbFunction cache(String cacheKey,Long cacheTime){
-        return new DbFunction(dataSourceManager,apiInfoContent,apiPager,utilsFunction,sqlInterceptor,dbCache,cacheKey,cacheTime);
+        return new DbFunction(dataSourceManager,apiInfoContent,parseService,apiPager,utilsFunction,sqlInterceptor,dbCache,cacheKey,cacheTime);
     }
 
     public void cacheClear(String cacheKey){
@@ -99,8 +103,22 @@ public class DbFunction implements IFunction {
         return list.get(0);
     }
 
+    private void dbFinal(long startTime,StringBuilder sbScript,ScriptContext scriptContext){
+        if (scriptContext == null){
+            return;
+        }
+        long diff = System.currentTimeMillis() - startTime;
+        String logScript = LogFormatUtils.sqlParam(sbScript, parseService,scriptContext);
+        if (apiInfoContent.getIsDebug()){
+            apiInfoContent.putLog(String.format("Elapsed Time:%sms , execute script: %s",diff,logScript));
+        }
+        log.debug("Elapsed Time:{}ms , execute script: {}",diff,logScript);
+
+        sqlInterceptor.after(sbScript.toString());
+    }
+
     @Deprecated
-    public List<Map<String,Object>> find(String script,String dataSource,Map<String,Object> params) throws Exception {
+    public List<Map<String,Object>> find(String script,String datasource,Map<String,Object> params) throws Exception {
 
         //获取缓存对象
         if (this.cacheKey != null){
@@ -114,15 +132,13 @@ public class DbFunction implements IFunction {
         StringBuilder sbScript = new StringBuilder(sqlInterceptor.before(script));
         List<Map<String,Object>> result = null;
         long startTime = System.currentTimeMillis();
+        ScriptContext scriptContext = null;
         try {
-            result = dataSourceManager.find(sbScript,apiInfoContent.getApiInfo(),apiInfoContent.getApiParams(),dataSource,params);
+            DataSourceDialect dataSourceDialect = dataSourceManager.getDataSourceDialect(apiInfoContent.getApiInfo().getDatasource(),datasource);
+            scriptContext = dataSourceManager.buildScriptContext(sbScript,dataSourceDialect,params);
+            result = dataSourceDialect.find(scriptContext);
         }finally {
-            long diff = System.currentTimeMillis() - startTime;
-            if (apiInfoContent.getIsDebug()){
-                apiInfoContent.putLog(String.format("Elapsed Time:%sms , execute script: %s",diff,sbScript));
-            }
-            log.debug("Elapsed Time:{}ms , execute script: {}",diff,sbScript);
-            sqlInterceptor.after(sbScript.toString());
+            dbFinal(startTime,sbScript,scriptContext);
         }
 
         //设置缓存对象
@@ -132,80 +148,131 @@ public class DbFunction implements IFunction {
         return result;
     }
 
+
+
+
+
     @Deprecated
-    public Object insert(String script,String dataSource,Map<String,Object> params) throws Exception {
+    public Object insert(String script,String datasource,Map<String,Object> params) throws Exception {
         script = parseSql(script);
         StringBuilder sbScript = new StringBuilder(sqlInterceptor.before(script));
         Object result = null;
         long startTime = System.currentTimeMillis();
+        ScriptContext scriptContext = null;
         try {
-            result = dataSourceManager.insert(sbScript,apiInfoContent.getApiInfo(),apiInfoContent.getApiParams(),dataSource,params);
+            DataSourceDialect dataSourceDialect = dataSourceManager.getDataSourceDialect(apiInfoContent.getApiInfo().getDatasource(),datasource);
+            scriptContext = dataSourceManager.buildScriptContext(sbScript,dataSourceDialect,params);
+            result = dataSourceDialect.insert(scriptContext);
         }finally {
-            long diff = System.currentTimeMillis() - startTime;
-            if (apiInfoContent.getIsDebug()){
-                apiInfoContent.putLog(String.format("Elapsed Time:%sms , execute script: %s",diff,sbScript));
-            }
-            log.debug("Elapsed Time:{}ms , execute script: {}",diff,sbScript);
-            sqlInterceptor.after(sbScript.toString());
+            dbFinal(startTime,sbScript,scriptContext);
         }
         return result;
     }
 
     @Deprecated
-    public Object remove(String script,String dataSource,Map<String,Object> params) throws Exception {
+    public Object remove(String script,String datasource,Map<String,Object> params) throws Exception {
         script = parseSql(script);
         StringBuilder sbScript = new StringBuilder(sqlInterceptor.before(script));
         Object result =  null;
         long startTime = System.currentTimeMillis();
+        ScriptContext scriptContext = null;
         try {
-            result = dataSourceManager.remove(sbScript,apiInfoContent.getApiInfo(),apiInfoContent.getApiParams(),dataSource,params);
+            DataSourceDialect dataSourceDialect = dataSourceManager.getDataSourceDialect(apiInfoContent.getApiInfo().getDatasource(),datasource);
+            scriptContext = dataSourceManager.buildScriptContext(sbScript,dataSourceDialect,params);
+            result = dataSourceDialect.remove(scriptContext);
         }finally {
-            long diff = System.currentTimeMillis() - startTime;
-            if (apiInfoContent.getIsDebug()){
-                apiInfoContent.putLog(String.format("Elapsed Time:%sms , execute script: %s",diff,sbScript));
-            }
-            log.debug("Elapsed Time:{}ms , execute script: {}",diff,sbScript);
-            sqlInterceptor.after(sbScript.toString());
+            dbFinal(startTime,sbScript,scriptContext);
         }
         return result;
     }
 
     @Deprecated
-    public Long update(String script,String dataSource,Map<String,Object> params) throws Exception {
+    public int update(String script,String datasource,Map<String,Object> params) throws Exception {
         script = parseSql(script);
         StringBuilder sbScript = new StringBuilder(sqlInterceptor.before(script));
-        Long result =  null;
+        int result;
         long startTime = System.currentTimeMillis();
+        ScriptContext scriptContext = null;
         try {
-            result = dataSourceManager.update(sbScript,apiInfoContent.getApiInfo(),apiInfoContent.getApiParams(),dataSource,params);
+            DataSourceDialect dataSourceDialect = dataSourceManager.getDataSourceDialect(apiInfoContent.getApiInfo().getDatasource(),datasource);
+            scriptContext = dataSourceManager.buildScriptContext(sbScript,dataSourceDialect,params);
+            result = dataSourceDialect.update(scriptContext);
         }finally {
-            long diff = System.currentTimeMillis() - startTime;
-            if (apiInfoContent.getIsDebug()){
-                apiInfoContent.putLog(String.format("Elapsed Time:%sms , execute script: %s",diff,sbScript));
-            }
-            log.debug("Elapsed Time:{}ms , execute script: {}",diff,sbScript);
-            sqlInterceptor.after(sbScript.toString());
+            dbFinal(startTime,sbScript,scriptContext);
         }
         return result;
     }
 
     @Deprecated
-    public Object pager(String script,String dataSource,Map<String,Object> params) throws Exception {
+    public int[] batchUpdate(String script,String datasource,List<Map<String,Object>> params) throws Exception {
         script = parseSql(script);
+        StringBuilder sbScript = new StringBuilder(sqlInterceptor.before(script));
+        int result[];
+        long startTime = System.currentTimeMillis();
+        ScriptContext scriptContext = null;
+        try {
+            DataSourceDialect dataSourceDialect = dataSourceManager.getDataSourceDialect(apiInfoContent.getApiInfo().getDatasource(),datasource);
+            scriptContext = dataSourceManager.buildScriptContext(sbScript,dataSourceDialect,params);
+            result = dataSourceDialect.batchUpdate(scriptContext);
+        }finally {
+            dbFinal(startTime,sbScript,scriptContext);
+        }
+        return result;
+    }
+
+    @Deprecated
+    public Object pager(String script,String datasource,Map<String,Object> params) throws Exception {
+
+        Integer pageNo = apiPager.getPageNo();
+        Integer pageSize = apiPager.getPageSize();
+        apiInfoContent.getEngineBindings().put(apiPager.getPageNoVarName(),pageNo);
+        apiInfoContent.getEngineBindings().put(apiPager.getPageSizeVarName(),pageSize);
+        apiInfoContent.getEngineBindings().put(apiPager.getOffsetVarName(),apiPager.getOffset(pageSize,pageNo));
+
+        script = parseSql(script);
+
+
+
         Page page = Page.builder()
-                .pageNo(Integer.valueOf(utilsFunction.val(apiPager.getPageNoVarName()).toString()))
-                .pageSize(Integer.valueOf(utilsFunction.val(apiPager.getPageSizeVarName()).toString()))
+                .pageNo(pageNo)
+                .pageSize(pageSize)
                 .build();
-        String totalSql = dataSourceManager.buildCountScript(script,apiInfoContent.getApiInfo(),apiInfoContent.getApiParams(),dataSource,params,apiPager,page);
-        Long total = this.count(totalSql,dataSource,params);
+
+        DataSourceDialect dataSourceDialect = dataSourceManager.getDataSourceDialect(apiInfoContent.getApiInfo().getDatasource(),datasource);
+
+        StringBuilder scriptBuilder = new StringBuilder(script);
+        params = parseService.parse(scriptBuilder,dataSourceDialect,params);
+        script = scriptBuilder.toString();
+
+        String totalSql = dataSourceDialect.buildCountScript(script,apiPager,page);
+
+        Long total = this.count(totalSql,datasource,params);
+
+
         List<Map<String,Object>> data = null;
         if (total > 0){
-            String pageSql = dataSourceManager.buildPageScript(script,apiInfoContent.getApiInfo(),apiInfoContent.getApiParams(),dataSource,params,apiPager,page);
-            data = this.find(pageSql,dataSource,params);
+            String pageSql = dataSourceDialect.buildPageScript(script,apiPager,page);
+            data = this.find(pageSql,datasource,params);
         }else{
             data = Collections.emptyList();
         }
         return apiPager.buildPager(total,data,apiInfoContent.getApiInfo(),apiInfoContent.getApiParams());
+    }
+
+    public Object pager(Long total, List list){
+        return apiPager.buildPager(total,list,apiInfoContent.getApiInfo(),apiInfoContent.getApiParams());
+    }
+
+    public Integer getPageNo(){
+        return apiPager.getPageNo();
+    }
+
+    public Integer getPageSize(){
+        return apiPager.getPageSize();
+    }
+
+    public Integer getOffset(){
+        return apiPager.getOffset(apiPager.getPageSize(), apiPager.getPageNo());
     }
 
     /*重载 script*/
@@ -239,7 +306,7 @@ public class DbFunction implements IFunction {
         return this.remove(script,null,null);
     }
 
-    public Long update(String script) throws Exception {
+    public int update(String script) throws Exception {
         script = parseSql(script);
         return this.update(script,null,null);
     }
@@ -283,7 +350,7 @@ public class DbFunction implements IFunction {
     }
 
     @Deprecated
-    public Long update(String script,String datasource) throws Exception {
+    public int update(String script,String datasource) throws Exception {
         script = parseSql(script);
         return this.update(script,datasource,null);
     }
@@ -319,8 +386,13 @@ public class DbFunction implements IFunction {
         return this.remove(script,null,params);
     }
 
-    public Long update(String script,Map<String,Object> params) throws Exception {
+    public int update(String script,Map<String,Object> params) throws Exception {
         script = parseSql(script);
         return this.update(script,null,params);
+    }
+
+    public int[] batchUpdate(String script,List<Map<String,Object>> params) throws Exception {
+        script = parseSql(script);
+        return this.batchUpdate(script,null,params);
     }
 }

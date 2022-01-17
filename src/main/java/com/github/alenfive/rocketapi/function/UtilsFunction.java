@@ -13,6 +13,7 @@ import com.github.alenfive.rocketapi.service.ScriptParseService;
 import com.github.alenfive.rocketapi.utils.CsvUtils;
 import com.github.alenfive.rocketapi.utils.ExcelUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,7 @@ import java.net.URLEncoder;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 工具类
@@ -48,6 +50,7 @@ public class UtilsFunction implements IFunction{
     private IScriptEncrypt scriptEncrypt;
 
     @Autowired
+    @Lazy
     private IScriptParse scriptParse;
 
     @Override
@@ -56,11 +59,21 @@ public class UtilsFunction implements IFunction{
     }
 
     /**
-     * 获取上下文中的指定变量
+     * 获取请求域中的指定参数
      * @param varName
      */
     public Object val(String varName){
-        return scriptParseService.buildParamItem(apiInfoContent.getApiParams(),null,varName);
+        return scriptParseService.buildRequestScopeParamItem(apiInfoContent.getApiParams(),null,varName);
+    }
+
+    /**
+     * 允许接受一个默认值
+     * @param varName
+     * @param defaultValue
+     * @return
+     */
+    public Object val(String varName,Object defaultValue){
+        return Optional.ofNullable(val(varName)).orElse(defaultValue);
     }
 
     /**

@@ -1,38 +1,36 @@
 package com.github.alenfive.rocketapi.datasource;
 
-import com.github.alenfive.rocketapi.entity.ApiInfo;
-import com.github.alenfive.rocketapi.entity.ApiParams;
 import com.github.alenfive.rocketapi.entity.vo.FieldInfo;
 import com.github.alenfive.rocketapi.entity.vo.Page;
 import com.github.alenfive.rocketapi.entity.vo.TableInfo;
 import com.github.alenfive.rocketapi.extend.IApiPager;
 import com.github.alenfive.rocketapi.utils.SqlUtils;
-import org.springframework.jdbc.core.JdbcTemplate;
 
+import javax.sql.DataSource;
 import java.util.*;
 
 /**
  * mysql 数据源
  */
-public class MySQLDataSource extends SqlDataSource {
+public class MySQLDataSource extends JdbcDataSource {
 
 
-    public MySQLDataSource(JdbcTemplate jdbcTemplate) {
-        super(jdbcTemplate);
+    public MySQLDataSource(DataSource dataSource) {
+        super(dataSource);
     }
 
-    public MySQLDataSource(JdbcTemplate jdbcTemplate, boolean storeApi) {
-        super(jdbcTemplate, storeApi);
+    public MySQLDataSource(DataSource dataSource, boolean storeApi) {
+        super(dataSource, storeApi);
     }
 
     @Override
-    public String buildCountScript(String script, ApiInfo apiInfo, ApiParams apiParams, IApiPager apiPager, Page page) {
+    public String buildCountScript(String script, IApiPager apiPager, Page page) {
         return  "select count(1) from ("+script+") t1";
     }
 
     @Override
-    public String buildPageScript(String script, ApiInfo apiInfo, ApiParams apiParams, IApiPager apiPager, Page page) {
-        Integer offset = apiPager.getIndexVarValue(page.getPageSize(),page.getPageNo());
+    public String buildPageScript(String script, IApiPager apiPager, Page page) {
+        Integer offset = apiPager.getOffset(page.getPageSize(),page.getPageNo());
         return  script + " limit "+offset+","+page.getPageSize();
     }
 
@@ -48,11 +46,11 @@ public class MySQLDataSource extends SqlDataSource {
     public List<TableInfo> buildTableInfo(){
         try {
             List<TableInfo> tableInfos = new ArrayList<>();
-            List<Map<String,Object>> tables = jdbcTemplate.queryForList("show tables");
+            List<Map<String,Object>> tables = jdbcTemplate.queryForList("show tables",Collections.EMPTY_MAP);
             for (Map<String,Object> table : tables){
                 Set<String> keys = table.keySet();
                 String tableName = table.get(keys.toArray(new String[]{})[0]).toString();
-                Map<String,Object> fields = jdbcTemplate.queryForMap("show create table "+tableName);
+                Map<String,Object> fields = jdbcTemplate.queryForMap("show create table "+tableName,Collections.EMPTY_MAP);
 
                 //只处理逻辑表
                 if (fields.get("Create Table") == null){
