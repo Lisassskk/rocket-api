@@ -1006,22 +1006,19 @@ function searchKeyword(keyword) {
             }
         }else if (item.name.indexOf(keyword) >=0){
             let newItem = $.extend({},item);
-            newItem.sourcePath = newItem.path;
             newItem.name = newItem.name.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchApiResult.push(newItem);
         }else if(item.path.indexOf(keyword)>=0){
             let newItem = $.extend({},item);
-            newItem.sourcePath = newItem.path;
             newItem.path = newItem.path.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchApiResult.push(newItem);
         }else if(item.fullPath.indexOf(keyword)>=0){
             let newItem = $.extend({},item);
-            newItem.sourcePath = newItem.path;
+            newItem.pathFullMatch = item.fullPath == keyword;
             newItem.path = newItem.path.replace(newItem.path,'<span class="s_match">'+newItem.path+'</span>')
             searchApiResult.push(newItem);
         }else if(item.script.indexOf(keyword)>=0){
             let newItem = $.extend({},item);
-            newItem.sourcePath = newItem.path;
             newItem.script = newItem.script.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchApiResult.push(newItem);
         }
@@ -1033,7 +1030,7 @@ function searchKeyword(keyword) {
 
     //搜索API上级目录
     $.each(searchApiResult,function (index,item){
-        searchParentDir(dirMap,item.directoryId,item.fullPath,item.sourcePath);
+        searchParentDir(dirMap,item.directoryId,item.pathFullMatch);
 
         //搜索结果优先
         apiMap.set(item.id,item);
@@ -1044,12 +1041,10 @@ function searchKeyword(keyword) {
     $.each(gdata.directoryList,function (index,item) {
         if (item.name.indexOf(keyword) >=0 ){
             let newItem = $.extend({},item);
-            newItem.sourcePath = newItem.path;
             newItem.name = newItem.name.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchDirectoryResult.push(newItem);
         }else if(item.path && item.path.indexOf(keyword)>=0){
             let newItem = $.extend({},item);
-            newItem.sourcePath = newItem.path;
             newItem.path = newItem.path.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchDirectoryResult.push(newItem);
         }
@@ -2974,20 +2969,22 @@ function searchChildDirOrApi(directoryMap,apiMap,directoryId){
  * @param directoryId
  * @param suffixPath
  */
-function searchParentDir(directoryMap,directoryId,fullPath,suffixPath){
+function searchParentDir(directoryMap,directoryId,pathFullMatch){
     $.each(gdata.directoryList,function (index,item) {
         if (item.id == directoryId){
 
             if (directoryMap.get(item.id)){
                 return;
             }
-
             let newItem = $.extend({},item);
+            if (pathFullMatch){
+                newItem.path = newItem.path.replace(newItem.path,'<span class="s_match">'+newItem.path+'</span>')
+            }
 
             directoryMap.set(newItem.id,newItem);
 
             if (newItem.parentId){
-                searchParentDir(directoryMap,newItem.parentId,fullPath,newItem.sourcePath + suffixPath)
+                searchParentDir(directoryMap,newItem.parentId,pathFullMatch)
             }
 
         }
