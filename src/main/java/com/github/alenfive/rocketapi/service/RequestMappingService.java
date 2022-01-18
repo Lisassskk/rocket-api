@@ -4,10 +4,13 @@ import com.github.alenfive.rocketapi.config.QLRequestMappingFactory;
 import com.github.alenfive.rocketapi.config.RocketApiProperties;
 import com.github.alenfive.rocketapi.entity.ApiInfo;
 import com.github.alenfive.rocketapi.entity.ApiType;
+import com.github.alenfive.rocketapi.utils.MappingInfoUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.method.HandlerMethod;
@@ -26,13 +29,15 @@ import java.util.Set;
 
 @Service
 @Slf4j
-public class RequestMappingService {
+public class RequestMappingService implements InitializingBean {
 
     @Autowired
     private RequestMappingHandlerMapping requestMappingHandlerMapping;
 
     @Autowired
     private RocketApiProperties rocketApiProperties;
+
+    private RequestMappingInfo.BuilderConfiguration config = new RequestMappingInfo.BuilderConfiguration();
 
     @Autowired
     @Lazy
@@ -52,7 +57,7 @@ public class RequestMappingService {
             }
 
             String groupName = map.get(info).getBeanType().getSimpleName();
-            for (String path : info.getPatternsCondition().getPatterns()) {
+            for (String path : MappingInfoUtils.getPatterns(info)) {
 
                 //过滤本身的类
                 if (path.indexOf(rocketApiProperties.getBaseRegisterPath()) == 0 || path.equals("/error")) {
@@ -119,9 +124,10 @@ public class RequestMappingService {
         }
 
         log.debug("Mapped [{}]{}", apiInfo.getMethod(), pattern);
-        PatternsRequestCondition patternsRequestCondition = new PatternsRequestCondition(pattern);
-        RequestMethodsRequestCondition methodsRequestCondition = new RequestMethodsRequestCondition(RequestMethod.valueOf(apiInfo.getMethod()));
-        mappingInfo = new RequestMappingInfo(patternsRequestCondition, methodsRequestCondition, null, null, null, null, null);
+        mappingInfo = RequestMappingInfo.paths(pattern)
+                .methods(RequestMethod.valueOf(apiInfo.getMethod()))
+                .options(this.config)
+                .build();
         Method targetMethod = QLRequestMappingFactory.class.getDeclaredMethod("execute", Map.class, Map.class, HttpServletRequest.class, HttpServletResponse.class);
         requestMappingHandlerMapping.registerMapping(mappingInfo, mappingFactory, targetMethod);
     }
@@ -159,7 +165,7 @@ public class RequestMappingService {
     private RequestMappingInfo getRequestMappingInfo(String pattern,String method){
         Map<RequestMappingInfo, HandlerMethod> map = requestMappingHandlerMapping.getHandlerMethods();
         for (RequestMappingInfo info : map.keySet()) {
-            Set<String> patterns = info.getPatternsCondition().getPatterns();
+            Set<String> patterns = MappingInfoUtils.getPatterns(info);
             Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
             if (patterns.contains(pattern) && (methods.isEmpty() || methods.contains(RequestMethod.valueOf(method)))){
                 return info;
@@ -175,12 +181,11 @@ public class RequestMappingService {
      */
     public Boolean isCodeMapping(String pattern,String method){
         Map<RequestMappingInfo, HandlerMethod> map = requestMappingHandlerMapping.getHandlerMethods();
-        List<ApiInfo> result = new ArrayList<>(map.size());
         for (RequestMappingInfo info : map.keySet()) {
             if (map.get(info).getMethod().getDeclaringClass() == QLRequestMappingFactory.class){
                 continue;
             }
-            Set<String> patterns = info.getPatternsCondition().getPatterns();
+            Set<String> patterns = MappingInfoUtils.getPatterns(info);
             Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
             if (patterns.contains(pattern) && (methods.isEmpty() || methods.contains(RequestMethod.valueOf(method)))){
                 return true;
@@ -191,4 +196,20 @@ public class RequestMappingService {
     }
 
 
+    @Override
+    public void afterPropertiesSet() throws Exception {
+        this.config.setTrailingSlashMatch(requestMappingHandlerMapping.useTrailingSlashMatch());
+        this.config.setContentNegotiationManager(requestMappingHandlerMapping.getContentNegotiationManager());
+
+        if (requestMappingHandlerMapping.getPatternParser() != null) {
+            this.config.setPatternParser(requestMappingHandlerMapping.getPatternParser());
+            Assert.isTrue(!requestMappingHandlerMapping.useSuffixPatternMatch() && !requestMappingHandlerMapping.useRegisteredSuffixPatternMatch(),
+                    "Suffix pattern matching not supported with PathPatternParser.");
+        }
+        else {
+            this.config.setSuffixPatternMatch(requestMappingHandlerMapping.useSuffixPatternMatch());
+            this.config.setRegisteredSuffixPatternMatch(requestMappingHandlerMapping.useRegisteredSuffixPatternMatch());
+            this.config.setPathMatcher(requestMappingHandlerMapping.getPathMatcher());
+        }
+    }
 }

@@ -84,7 +84,7 @@ public class RedisApiInfoCache implements IApiInfoCache{
         }
         try {
             cursor.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
         return keys;
