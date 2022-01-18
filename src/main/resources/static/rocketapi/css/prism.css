@@ -285,6 +285,6 @@ pre[class*="language-"] {
 }
 
 
-.s_match{
+.s_match,.s_match_sub{
     color:#08c;
 }

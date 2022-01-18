@@ -1006,18 +1006,22 @@ function searchKeyword(keyword) {
             }
         }else if (item.name.indexOf(keyword) >=0){
             let newItem = $.extend({},item);
+            newItem.sourcePath = newItem.path;
             newItem.name = newItem.name.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchApiResult.push(newItem);
         }else if(item.path.indexOf(keyword)>=0){
             let newItem = $.extend({},item);
+            newItem.sourcePath = newItem.path;
             newItem.path = newItem.path.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchApiResult.push(newItem);
         }else if(item.fullPath.indexOf(keyword)>=0){
             let newItem = $.extend({},item);
+            newItem.sourcePath = newItem.path;
             newItem.path = newItem.path.replace(newItem.path,'<span class="s_match">'+newItem.path+'</span>')
             searchApiResult.push(newItem);
         }else if(item.script.indexOf(keyword)>=0){
             let newItem = $.extend({},item);
+            newItem.sourcePath = newItem.path;
             newItem.script = newItem.script.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchApiResult.push(newItem);
         }
@@ -1029,7 +1033,7 @@ function searchKeyword(keyword) {
 
     //搜索API上级目录
     $.each(searchApiResult,function (index,item){
-        searchParentDir(dirMap,item.directoryId)
+        searchParentDir(dirMap,item.directoryId,item.fullPath,item.sourcePath);
 
         //搜索结果优先
         apiMap.set(item.id,item);
@@ -1040,13 +1044,16 @@ function searchKeyword(keyword) {
     $.each(gdata.directoryList,function (index,item) {
         if (item.name.indexOf(keyword) >=0 ){
             let newItem = $.extend({},item);
+            newItem.sourcePath = newItem.path;
             newItem.name = newItem.name.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchDirectoryResult.push(newItem);
         }else if(item.path && item.path.indexOf(keyword)>=0){
             let newItem = $.extend({},item);
+            newItem.sourcePath = newItem.path;
             newItem.path = newItem.path.replace(keyword,'<span class="s_match">'+keyword+'</span>')
             searchDirectoryResult.push(newItem);
         }
+
     })
 
     //搜索匹配目录的上级目录，下级目录，当前目录和下级目录的接口
@@ -2961,17 +2968,28 @@ function searchChildDirOrApi(directoryMap,apiMap,directoryId){
     })
 }
 
-function searchParentDir(directoryMap,directoryId){
+/**
+ * suffixPath 后缀路径，用于向上传递路径，并对目录中的path是否匹配，标记选中颜色
+ * @param directoryMap
+ * @param directoryId
+ * @param suffixPath
+ */
+function searchParentDir(directoryMap,directoryId,fullPath,suffixPath){
     $.each(gdata.directoryList,function (index,item) {
         if (item.id == directoryId){
 
-            if (!directoryMap.get(item.id)){
-                directoryMap.set(item.id,item);
+            if (directoryMap.get(item.id)){
+                return;
             }
 
-            if (item.parentId){
-                searchParentDir(directoryMap,item.parentId)
+            let newItem = $.extend({},item);
+
+            directoryMap.set(newItem.id,newItem);
+
+            if (newItem.parentId){
+                searchParentDir(directoryMap,newItem.parentId,fullPath,newItem.sourcePath + suffixPath)
             }
+
         }
     })
 }
