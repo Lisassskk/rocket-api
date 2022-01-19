@@ -1,15 +1,13 @@
 package com.github.alenfive.rocketapi.utils;
 
 import com.github.alenfive.rocketapi.entity.DBConfig;
-import com.mongodb.MongoClientURI;
-import org.springframework.data.mongodb.MongoDbFactory;
+import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.SimpleMongoDbFactory;
+import org.springframework.data.mongodb.core.SimpleMongoClientDatabaseFactory;
 
 public class MongoDBUtils {
     public static MongoTemplate getMongoTemplate(DBConfig config){
-        MongoClientURI mongoClientURI = new MongoClientURI(config.getUrl());
-        MongoDbFactory mongoDbFactory = new SimpleMongoDbFactory(mongoClientURI);
+        MongoDatabaseFactory mongoDbFactory = new SimpleMongoClientDatabaseFactory(config.getUrl());
         return new MongoTemplate(mongoDbFactory);
     }
 }

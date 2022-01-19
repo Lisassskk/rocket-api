@@ -159,7 +159,7 @@ public class RequestMappingService {
     private RequestMappingInfo getRequestMappingInfo(String pattern,String method){
         Map<RequestMappingInfo, HandlerMethod> map = requestMappingHandlerMapping.getHandlerMethods();
         for (RequestMappingInfo info : map.keySet()) {
-            Set<String> patterns = info.getPatternsCondition().getPatterns();
+            Set<String> patterns = info.getPathPatternsCondition() == null?info.getPatternsCondition().getPatterns():info.getPathPatternsCondition().getPatternValues();
             Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
             if (patterns.contains(pattern) && (methods.isEmpty() || methods.contains(RequestMethod.valueOf(method)))){
                 return info;
@@ -180,7 +180,7 @@ public class RequestMappingService {
             if (map.get(info).getMethod().getDeclaringClass() == QLRequestMappingFactory.class){
                 continue;
             }
-            Set<String> patterns = info.getPatternsCondition().getPatterns();
+            Set<String> patterns = info.getPathPatternsCondition() == null?info.getPatternsCondition().getPatterns():info.getPathPatternsCondition().getPatternValues();
             Set<RequestMethod> methods = info.getMethodsCondition().getMethods();
             if (patterns.contains(pattern) && (methods.isEmpty() || methods.contains(RequestMethod.valueOf(method)))){
                 return true;
