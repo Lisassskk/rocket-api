@@ -156,9 +156,10 @@ public class RequestMappingService implements InitializingBean {
         }
 
         log.debug("Cancel Mapping [{}]{}", apiInfo.getMethod(), pattern);
-        PatternsRequestCondition patternsRequestCondition = new PatternsRequestCondition(pattern);
-        RequestMethodsRequestCondition methodsRequestCondition = new RequestMethodsRequestCondition(RequestMethod.valueOf(apiInfo.getMethod()));
-        mappingInfo = new RequestMappingInfo(patternsRequestCondition, methodsRequestCondition, null, null, null, null, null);
+        mappingInfo = RequestMappingInfo.paths(pattern)
+                .methods(RequestMethod.valueOf(apiInfo.getMethod()))
+                .options(this.config)
+                .build();
         requestMappingHandlerMapping.unregisterMapping(mappingInfo);
     }
 
