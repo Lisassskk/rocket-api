@@ -380,16 +380,23 @@ public class ScriptParseService {
      */
     public Object buildContentScopeParamItem(Map<String,Object> specifyParams, String scriptLanguage) {
         Bindings bindings = specifyParams!= null?new SimpleBindings(specifyParams):apiInfoContent.getEngineBindings();
+        Object value = null;
         try{
             //变量与脚本提取区分
             if (Pattern.matches("^\\w+$", scriptLanguage)){
-                return bindings.get(scriptLanguage);
+                value = bindings.get(scriptLanguage);
             }else {
-                return scriptParse.engineEval(scriptLanguage,bindings);
+                value = scriptParse.engineEval(scriptLanguage,bindings);
             }
         }catch (Throwable e){
             throw new IllegalArgumentException(e.getMessage());
         }
+
+        //数组转list
+        if (value != null && value.getClass().isArray()){
+            value = Arrays.asList((String[])value);
+        }
+        return value;
     }
 
     private Object buildValueOfScriptContent(Bindings bindings, String[] paramArr, int index) {
