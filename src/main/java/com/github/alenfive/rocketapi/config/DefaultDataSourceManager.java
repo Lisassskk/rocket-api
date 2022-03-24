@@ -7,13 +7,10 @@ import com.github.alenfive.rocketapi.datasource.MySQLDataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionManager;
 
 import javax.annotation.PostConstruct;
-import javax.sql.DataSource;
 import java.util.LinkedHashMap;
 import java.util.Map;
 

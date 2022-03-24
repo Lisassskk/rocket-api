@@ -5,7 +5,6 @@ import com.github.alenfive.rocketapi.entity.vo.TableInfo;
 import com.github.alenfive.rocketapi.extend.IApiPager;
 import org.springframework.transaction.PlatformTransactionManager;
 
-import javax.sql.DataSource;
 import java.util.List;
 
 /**
