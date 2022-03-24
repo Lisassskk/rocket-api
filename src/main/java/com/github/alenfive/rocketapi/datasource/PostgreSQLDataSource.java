@@ -3,6 +3,7 @@ package com.github.alenfive.rocketapi.datasource;
 import com.github.alenfive.rocketapi.entity.vo.Page;
 import com.github.alenfive.rocketapi.entity.vo.TableInfo;
 import com.github.alenfive.rocketapi.extend.IApiPager;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.util.List;
@@ -12,12 +13,15 @@ import java.util.List;
  */
 public class PostgreSQLDataSource extends JdbcDataSource {
 
-    public PostgreSQLDataSource(DataSource dataSource) {
-        super(dataSource);
+    public PostgreSQLDataSource() {
     }
 
-    public PostgreSQLDataSource(DataSource dataSource, boolean storeApi) {
-        super(dataSource, storeApi);
+    public PostgreSQLDataSource(PlatformTransactionManager transactionManager) {
+        super(transactionManager);
+    }
+
+    public PostgreSQLDataSource(PlatformTransactionManager transactionManager, boolean storeApi) {
+        super(transactionManager, storeApi);
     }
 
     @Override

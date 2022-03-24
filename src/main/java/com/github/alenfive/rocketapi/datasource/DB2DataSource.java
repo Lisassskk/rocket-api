@@ -3,6 +3,7 @@ package com.github.alenfive.rocketapi.datasource;
 import com.github.alenfive.rocketapi.entity.vo.Page;
 import com.github.alenfive.rocketapi.entity.vo.TableInfo;
 import com.github.alenfive.rocketapi.extend.IApiPager;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.util.List;
@@ -12,12 +13,15 @@ import java.util.List;
  */
 public class DB2DataSource extends JdbcDataSource {
 
-    public DB2DataSource(DataSource dataSource) {
-        super(dataSource);
+    public DB2DataSource() {
     }
 
-    public DB2DataSource(DataSource dataSource, boolean storeApi) {
-       super(dataSource,storeApi);
+    public DB2DataSource(PlatformTransactionManager transactionManager) {
+        super(transactionManager);
+    }
+
+    public DB2DataSource(PlatformTransactionManager transactionManager, boolean storeApi) {
+       super(transactionManager,storeApi);
     }
 
     @Override

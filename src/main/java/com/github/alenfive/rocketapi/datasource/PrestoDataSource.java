@@ -8,6 +8,7 @@ import com.github.alenfive.rocketapi.extend.IApiPager;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.util.List;
@@ -19,8 +20,11 @@ import java.util.stream.Collectors;
  */
 public class PrestoDataSource extends JdbcDataSource {
 
-    public PrestoDataSource(DataSource dataSource) {
-        super(dataSource);
+    public PrestoDataSource() {
+    }
+
+    public PrestoDataSource(PlatformTransactionManager transactionManager) {
+        super(transactionManager);
     }
 
     @Override

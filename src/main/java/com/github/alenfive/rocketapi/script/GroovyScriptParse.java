@@ -15,9 +15,7 @@ import com.github.alenfive.rocketapi.function.IFunction;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
-import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.*;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
@@ -85,7 +83,7 @@ public class GroovyScriptParse implements IScriptParse{
             //注入变量
             apiInfoContent.setApiInfo(apiInfo);
             apiInfoContent.setApiParams(apiParams);
-
+;
             Bindings bindings = new SimpleBindings();
 
             apiInfoContent.setEngineBindings(bindings);

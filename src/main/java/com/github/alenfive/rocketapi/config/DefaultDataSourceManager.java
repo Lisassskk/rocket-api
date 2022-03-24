@@ -7,7 +7,10 @@ import com.github.alenfive.rocketapi.datasource.MySQLDataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionManager;
 
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
@@ -22,7 +25,7 @@ import java.util.Map;
 public class DefaultDataSourceManager extends DataSourceManager {
 
     @Autowired
-    private DataSource dataSource;
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private MongoTemplate mongoTemplate;
@@ -33,7 +36,7 @@ public class DefaultDataSourceManager extends DataSourceManager {
                 " !!! 不要启动我，我只为编译调试源码而生，调试成功后mvn package 会输出 'rocket-api-boot-starter',关于如何使用stater,请看业务集成demo:https://gitee.com/alenfive/rocket-api-demo" +
                 "\n--------------------------------------\n");
         Map<String,DataSourceDialect> dialectMap = new LinkedHashMap<>();
-        dialectMap.put("mysql",new MySQLDataSource(dataSource,true));
+        dialectMap.put("mysql",new MySQLDataSource(transactionManager,true));
         dialectMap.put("mongodb",new MongoDataSource(mongoTemplate));
         super.setDialectMap(dialectMap);
     }

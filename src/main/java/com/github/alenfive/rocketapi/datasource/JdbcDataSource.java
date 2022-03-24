@@ -11,10 +11,13 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.JdbcTransactionManager;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionManager;
 
 import javax.sql.DataSource;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -30,30 +33,47 @@ public class JdbcDataSource extends DataSourceDialect implements DialectTransact
 
     protected PlatformTransactionManager transactionManager;
 
-    private JdbcDataSource(){}
+    public JdbcDataSource(){}
 
-    public JdbcDataSource(DataSource dataSource) {
-        this.jdbcTemplate = new NamedParameterJdbcTemplate(dataSource);
-        this.transactionManager = new DataSourceTransactionManager(dataSource);
-        this.dataSource = dataSource;
+    public JdbcDataSource(PlatformTransactionManager transactionManager) {
+        this.transactionManager = transactionManager;
+        if (transactionManager instanceof DataSourceTransactionManager){
+            this.dataSource = ((DataSourceTransactionManager)transactionManager).getDataSource();
+            this.jdbcTemplate = new NamedParameterJdbcTemplate(this.dataSource);
+        }
     }
 
-    public JdbcDataSource(DataSource dataSource, boolean storeApi) {
-        this.jdbcTemplate = new NamedParameterJdbcTemplate(dataSource);
-        this.transactionManager = new DataSourceTransactionManager(dataSource);
-        this.dataSource = dataSource;
+    public JdbcDataSource(PlatformTransactionManager transactionManager, boolean storeApi) {
+        this(transactionManager);
         this.storeApi = storeApi;
     }
+
 
     @Override
     public PlatformTransactionManager getTransactionManager() {
         return transactionManager;
     }
 
-    public NamedParameterJdbcTemplate getJdbcTemplate(){
-        return this.jdbcTemplate;
+
+    public DataSource getDataSource() {
+        return dataSource;
     }
 
+    public void setDataSource(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    public NamedParameterJdbcTemplate getJdbcTemplate() {
+        return jdbcTemplate;
+    }
+
+    public void setJdbcTemplate(NamedParameterJdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public void setTransactionManager(PlatformTransactionManager transactionManager) {
+        this.transactionManager = transactionManager;
+    }
 
     @Override
     public <T extends ApiEntity> void saveEntity(T entity) {
@@ -90,6 +110,8 @@ public class JdbcDataSource extends DataSourceDialect implements DialectTransact
         List<Map<String,Object>> resultList = jdbcTemplate.queryForList(scriptContext.getScript().toString(), scriptContext.getParams()[0]);
         return resultList.stream().map(this::toReplaceKeyLow).collect(Collectors.toList());
     }
+
+
 
     @Override
     public int update(ScriptContext scriptContext) {

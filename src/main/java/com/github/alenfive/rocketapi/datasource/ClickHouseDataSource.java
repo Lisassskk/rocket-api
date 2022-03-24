@@ -8,6 +8,7 @@ import com.github.alenfive.rocketapi.extend.IApiPager;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.util.List;
@@ -19,8 +20,11 @@ import java.util.stream.Collectors;
  */
 public class ClickHouseDataSource extends JdbcDataSource {
 
-    public ClickHouseDataSource(DataSource dataSource) {
-        super(dataSource);
+    public ClickHouseDataSource() {
+    }
+
+    public ClickHouseDataSource(PlatformTransactionManager transactionManager) {
+        super(transactionManager);
     }
 
     @Override
@@ -59,9 +63,16 @@ public class ClickHouseDataSource extends JdbcDataSource {
         return resultList.stream().map(this::toReplaceKeyLow).collect(Collectors.toList());
     }
 
+    /**
+     * EG:
+     * ALTER TABLE user UPDATE num=1 WHERE id = 1;
+     * ALTER TABLE user DELETE WHERE id = 1;
+     * @param scriptContext
+     * @return
+     */
     @Override
     public int update(ScriptContext scriptContext) {
-        throw new UnsupportedOperationException("The operation is not allowed");
+        return jdbcTemplate.update(scriptContext.getScript().toString(), scriptContext.getParams()[0]);
     }
 
     @Override
@@ -78,12 +89,13 @@ public class ClickHouseDataSource extends JdbcDataSource {
 
     @Override
     public String buildCountScript(String script,IApiPager apiPager,Page page) {
-        return script;
+        return  "select count(1) from ("+script+") t1";
     }
 
     @Override
     public String buildPageScript(String script,IApiPager apiPager,Page page) {
-        return script;
+        Integer offset = apiPager.getOffset(page.getPageSize(),page.getPageNo());
+        return  script + " limit "+page.getPageSize()+" offset "+offset;
     }
 
     @Override

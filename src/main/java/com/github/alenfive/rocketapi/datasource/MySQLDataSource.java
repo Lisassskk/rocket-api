@@ -5,6 +5,7 @@ import com.github.alenfive.rocketapi.entity.vo.Page;
 import com.github.alenfive.rocketapi.entity.vo.TableInfo;
 import com.github.alenfive.rocketapi.extend.IApiPager;
 import com.github.alenfive.rocketapi.utils.SqlUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
 import java.util.*;
@@ -14,13 +15,14 @@ import java.util.*;
  */
 public class MySQLDataSource extends JdbcDataSource {
 
+    public MySQLDataSource(){}
 
-    public MySQLDataSource(DataSource dataSource) {
-        super(dataSource);
+    public MySQLDataSource(PlatformTransactionManager transactionManager) {
+        super(transactionManager);
     }
 
-    public MySQLDataSource(DataSource dataSource, boolean storeApi) {
-        super(dataSource, storeApi);
+    public MySQLDataSource(PlatformTransactionManager transactionManager, boolean storeApi) {
+        super(transactionManager, storeApi);
     }
 
     @Override
