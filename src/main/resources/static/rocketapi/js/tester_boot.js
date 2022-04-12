@@ -2136,6 +2136,9 @@ function showDiff(id) {
         }
     }
 
+    $("#diff-left-id").html(apiHistory.id);
+    $("#diff-left-time").html(apiHistory.createTime);
+
     loadDetailById(apiHistory.apiInfoId,"#editor-section",function () {
         $("#editor-section .diff-body").show();
         $("#editor-section .code-body").hide();
