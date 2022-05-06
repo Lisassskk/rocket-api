@@ -93,6 +93,27 @@ public class RocketApiProperties {
      */
     private ApiSqlModel sqlModel = new ApiSqlModel();
 
+    private DataSource dataSource = new DataSource();
+
+    @Data
+    public static class DataSource{
+
+        private DatasourceCheck check = new DatasourceCheck();
+
+        @Data
+        public static class DatasourceCheck{
+            /**
+             * 是否开启验证，默认为true,会定时从数据源配置中连接是否存在
+             */
+            private Boolean enabled = true;
+            /**
+             * 定时检测周期，默认一分钟,需要在Application类中开启@EnableScheduling 才能使用
+             */
+            private String fixedDelay = "PT1M";
+        }
+
+    }
+
     @Data
     public static class ApiSqlModel{
         /**

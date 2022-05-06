@@ -160,7 +160,7 @@ public class DataSourceService {
      * 动态数据源加载
      * @param config
      */
-    private void loadDBConfig(DBConfig config) throws Exception{
+    public void loadDBConfig(DBConfig config) throws Exception{
 
         if (!config.isEnabled()){
             return;
