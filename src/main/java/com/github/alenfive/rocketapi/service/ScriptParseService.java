@@ -146,7 +146,7 @@ public class ScriptParseService {
             if (ifSplitIndex == -1){
                 throw new IllegalArgumentException("missed if split ','");
             }
-            String condition = script.substring(startIf+flag.length(),ifSplitIndex);
+            String condition = script.substring(startIf+flag.length(),ifSplitIndex).trim();
 
             Object value = buildContentScopeParamItem(specifyParams,condition);
 
