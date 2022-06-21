@@ -17,10 +17,15 @@ import com.github.alenfive.rocketapi.service.DataSourceService;
 import com.github.alenfive.rocketapi.service.ScriptParseService;
 import com.github.alenfive.rocketapi.utils.PackageUtils;
 import com.github.alenfive.rocketapi.utils.RequestUtils;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -47,7 +52,7 @@ import java.util.Map;
 @SuppressWarnings("DuplicatedCode")
 @Slf4j
 @Component
-public class QLRequestMappingFactory {
+public class QLRequestMappingFactory implements ApplicationListener<ContextRefreshedEvent> {
 
     @Autowired
     private ScriptParseService parseService;
@@ -100,10 +105,10 @@ public class QLRequestMappingFactory {
     /**
      * 初始化db mapping
      */
-    @PostConstruct
+    /*@PostConstruct
     public void buildInit() throws Exception {
         reInit(true);
-    }
+    }*/
 
     public void reInit(Boolean isStart) throws Exception {
         //register setParseService
@@ -220,6 +225,12 @@ public class QLRequestMappingFactory {
         }
     }
 
-
-
+    @SneakyThrows
+    @Override
+    public void onApplicationEvent(ContextRefreshedEvent contextRefreshedEvent) {
+        ApplicationContext parent = contextRefreshedEvent.getApplicationContext().getParent();
+        if (parent == null){
+            reInit(true);
+        }
+    }
 }
