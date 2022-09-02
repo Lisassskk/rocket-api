@@ -43,7 +43,7 @@
 
 ### 相关开源
 
-> Dataway[ https://www.hasor.net/doc/display/dataway ]( https://www.hasor.net/doc/display/dataway ) 
+> Dataway[ https://www.dataql.net/  ]( https://www.dataql.net/  ) 
 
 > Magic-API [https://ssssssss.org/guide/intro.html](https://ssssssss.org/guide/intro.html)  
 
