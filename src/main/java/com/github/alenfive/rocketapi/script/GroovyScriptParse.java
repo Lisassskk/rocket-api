@@ -168,6 +168,7 @@ public class GroovyScriptParse implements IScriptParse{
 
 
 
+    @SuppressWarnings("DuplicatedCode")
     private void buildScriptParams(Bindings bindings, ApiParams apiParams) {
         bindings.put("pathVar",apiParams.getPathVar());
         bindings.put("param",apiParams.getParam());

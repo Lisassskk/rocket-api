@@ -153,6 +153,12 @@ public class RocketApiAutoConfig {
 
     @Bean
     @ConditionalOnMissingBean
+    public IRequestInterceptor getIRequestInterceptor(){
+        return new DefaultRequestInterceptor();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public IDBCache getDBCache(){
         return new DefaultDBCache();
     }

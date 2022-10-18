@@ -210,7 +210,7 @@ public class UtilsFunction implements IFunction{
      * @return
      * @throws JsonProcessingException
      */
-    public String pasreToString(Object obj) throws JsonProcessingException {
+    public String parseToString(Object obj) throws JsonProcessingException {
         return objectMapper.writeValueAsString(obj);
     }
 
@@ -220,7 +220,7 @@ public class UtilsFunction implements IFunction{
      * @return
      * @throws IOException
      */
-    public Object pasreToObject(String str) throws IOException {
+    public Object parseToObject(String str) throws IOException {
         return objectMapper.readValue(str,Object.class);
     }
 

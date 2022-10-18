@@ -6,10 +6,7 @@ import com.github.alenfive.rocketapi.datasource.DataSourceManager;
 import com.github.alenfive.rocketapi.entity.ApiInfo;
 import com.github.alenfive.rocketapi.entity.ApiParams;
 import com.github.alenfive.rocketapi.entity.vo.IgnoreWrapper;
-import com.github.alenfive.rocketapi.extend.ApiInfoContent;
-import com.github.alenfive.rocketapi.extend.IApiInfoCache;
-import com.github.alenfive.rocketapi.extend.IResultWrapper;
-import com.github.alenfive.rocketapi.extend.IScriptEncrypt;
+import com.github.alenfive.rocketapi.extend.*;
 import com.github.alenfive.rocketapi.script.IScriptParse;
 import com.github.alenfive.rocketapi.service.ApiInfoService;
 import com.github.alenfive.rocketapi.service.ConfigService;
@@ -90,6 +87,9 @@ public class QLRequestMappingFactory implements ApplicationListener<ContextRefre
 
     @Autowired
     private ApiInfoService apiInfoService;
+
+    @Autowired
+    private IRequestInterceptor requestInterceptor;
 
     /**
      * 需要先初始化
@@ -202,7 +202,12 @@ public class QLRequestMappingFactory implements ApplicationListener<ContextRefre
 
         StringBuilder script = new StringBuilder(scriptEncrypt.decrypt(apiInfo.getScript()));
         try {
-            Object data = scriptParse.runScript(script.toString(), apiInfo, apiParams);
+            Boolean isProcess = requestInterceptor.preHandle(request,response,apiInfo,apiParams);
+            Object data = null;
+            if (isProcess){
+                data = scriptParse.runScript(script.toString(), apiInfo, apiParams);
+            }
+
             if (data instanceof ResponseEntity) {
                 return (ResponseEntity) data;
             }
