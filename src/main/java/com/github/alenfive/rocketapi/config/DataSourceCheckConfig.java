@@ -6,6 +6,7 @@ import com.github.alenfive.rocketapi.entity.DBConfig;
 import com.github.alenfive.rocketapi.service.DataSourceService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -19,6 +20,7 @@ import java.util.Map;
 @Configuration
 @ConditionalOnProperty(value = "spring.rocket-api.datasource.check.enabled",havingValue = "true",matchIfMissing = true)
 @Slf4j
+@ConditionalOnBean(DataSourceManager.class)
 public class DataSourceCheckConfig {
 
     @Autowired

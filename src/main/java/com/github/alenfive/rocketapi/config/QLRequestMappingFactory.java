@@ -105,11 +105,10 @@ public class QLRequestMappingFactory implements ApplicationListener<ContextRefre
     /**
      * 初始化db mapping
      */
-    /*@PostConstruct
+    @PostConstruct
     public void buildInit() throws Exception {
         reInit(true);
-    }*/
-
+    }
     public void reInit(Boolean isStart) throws Exception {
         //register setParseService
         dataSourceManager.setParseService(parseService);
