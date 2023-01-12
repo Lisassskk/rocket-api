@@ -970,11 +970,7 @@ function saveExecuter(params) {
             hideSendNotify();
         }
     });
-    if (params.id){
-        MtaH5.clickStat("api_save")
-    }else{
-        MtaH5.clickStat("api_new")
-    }
+
 }
 
 function searchApi(e) {
