@@ -91,24 +91,11 @@ public class QLRequestMappingFactory implements ApplicationListener<ContextRefre
     @Autowired
     private IRequestInterceptor requestInterceptor;
 
-    /**
-     * 需要先初始化
-     */
-    @Autowired
-    private SpringContextUtils springContextUtils;
-
     @Autowired
     private DataSourceService dataSourceService;
 
     private List<String> bodyMethods = Arrays.asList("POST", "PUT", "PATCH");
 
-    /**
-     * 初始化db mapping
-     */
-    @PostConstruct
-    public void buildInit() throws Exception {
-        reInit(true);
-    }
     public void reInit(Boolean isStart) throws Exception {
         //register setParseService
         dataSourceManager.setParseService(parseService);
