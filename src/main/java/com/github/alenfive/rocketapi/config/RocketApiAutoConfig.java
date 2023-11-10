@@ -7,6 +7,9 @@ import com.github.alenfive.rocketapi.datasource.DataSourceManager;
 import com.github.alenfive.rocketapi.datasource.factory.*;
 import com.github.alenfive.rocketapi.extend.*;
 import com.github.alenfive.rocketapi.function.*;
+import com.github.alenfive.rocketapi.permission.api.ApiPermissionAspect;
+import com.github.alenfive.rocketapi.permission.api.ApiPermissionClient;
+import com.github.alenfive.rocketapi.permission.datalist.DataListPermissionClient;
 import com.github.alenfive.rocketapi.script.GroovyScriptParse;
 import com.github.alenfive.rocketapi.script.IScriptParse;
 import com.github.alenfive.rocketapi.service.*;
@@ -294,4 +297,24 @@ public class RocketApiAutoConfig {
     public IClusterNotify getClusterNotify(){
         return new DefaultClusterNotify();
     }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DataListPermissionClient getDataListPermissionClient(){
+        return new DataListPermissionClient();
+    }
+
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ApiPermissionClient getApiPermissionClient(){
+        return new ApiPermissionClient();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ApiPermissionAspect getApiPermissionAspect(){
+        return new ApiPermissionAspect();
+    }
+
 }
