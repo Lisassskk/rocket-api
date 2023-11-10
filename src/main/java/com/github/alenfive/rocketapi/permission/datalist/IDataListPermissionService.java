@@ -4,9 +4,9 @@ import java.util.List;
 
 /**
  * 数据集权限处理，可通过实现该接口来自定义权限处理逻辑
- * @author hongyang
+ * @author bxf
  * @version 1.0
- * @date 2023/7/3 9:18
+ * @date 2023/11/10 9:18
  */
 public interface IDataListPermissionService {
 
