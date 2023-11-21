@@ -12,6 +12,8 @@ import com.github.alenfive.rocketapi.entity.vo.NotifyEntity;
 import com.github.alenfive.rocketapi.entity.vo.NotifyEventType;
 import com.github.alenfive.rocketapi.entity.vo.RefreshDB;
 import com.github.alenfive.rocketapi.extend.IClusterNotify;
+import com.github.alenfive.rocketapi.permission.constant.DataConstant;
+import com.github.alenfive.rocketapi.permission.datalist.DataListPermissionClient;
 import com.github.alenfive.rocketapi.utils.GenerateId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -42,6 +44,9 @@ public class DataSourceService {
     @Autowired
     @Lazy
     private IClusterNotify clusterNotify;
+
+    @Autowired
+    private DataListPermissionClient dataListPermissionClient;
 
     public List<DBConfig> getDBConfig(){
         List<ApiConfig> configList = dataSourceManager.getStoreApiDataSource().listByEntity(ApiConfig.builder().service(rocketApiProperties.getServiceName()).type(ConfigType.DB.name()).build());
@@ -77,6 +82,10 @@ public class DataSourceService {
         //集群刷新
         RefreshDB refreshDB = RefreshDB.builder().oldDBName(dbConfig.getName()).build();
         clusterNotify.sendNotify(NotifyEntity.builder().eventType(NotifyEventType.RefreshDB).refreshDB(refreshDB).build());
+        //删除后调用权限
+        if(dataListPermissionClient.hasPermissionService()){
+            dataListPermissionClient.deletePermission(DataConstant.ListDataType.datasource,dbConfig.getId());
+        }
     }
 
     private void assertDBConfigName(String dbName,String dbId) {
@@ -110,6 +119,10 @@ public class DataSourceService {
 
             //加载新连接
             loadDBConfig(dbConfig);
+            //添加后调用权限
+            if(dataListPermissionClient.hasPermissionService()){
+                dataListPermissionClient.addPermission(DataConstant.ListDataType.datasource,dbConfig.getId());
+            }
         } else {
             oldDBConfig = getDBConfigById(dbConfig.getId());
 

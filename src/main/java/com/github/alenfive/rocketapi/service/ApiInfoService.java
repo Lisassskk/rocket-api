@@ -8,6 +8,8 @@ import com.github.alenfive.rocketapi.entity.vo.*;
 import com.github.alenfive.rocketapi.extend.IApiInfoCache;
 import com.github.alenfive.rocketapi.extend.IApiPager;
 import com.github.alenfive.rocketapi.extend.IClusterNotify;
+import com.github.alenfive.rocketapi.permission.constant.DataConstant;
+import com.github.alenfive.rocketapi.permission.datalist.DataListPermissionClient;
 import com.github.alenfive.rocketapi.utils.GenerateId;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +44,9 @@ public class ApiInfoService {
 
     private IApiPager apiPager = new SysApiPager();
 
+    @Autowired
+    private DataListPermissionClient dataListPermissionClient;
+
     @Transactional
     public String saveApiInfo(ApiInfo apiInfo) throws Exception {
 
@@ -67,6 +72,10 @@ public class ApiInfoService {
             apiInfo.setService(rocketApiProperties.getServiceName());
             apiInfo.setId(GenerateId.get().toHexString());
             dataSourceManager.getStoreApiDataSource().saveEntity(apiInfo);
+            //添加后调用权限
+            if(dataListPermissionClient.hasPermissionService()){
+                dataListPermissionClient.addPermission(DataConstant.ListDataType.apilist,apiInfo.getId());
+            }
         } else {
             apiInfo.setType(dbInfo.getType());
             apiInfo.setCreateTime(dbInfo.getCreateTime());
@@ -149,6 +158,10 @@ public class ApiInfoService {
 
         //触发集群刷新
         this.sendNotify(dbInfo,null);
+        //删除后调用权限
+        if(dataListPermissionClient.hasPermissionService()){
+            dataListPermissionClient.deletePermission(DataConstant.ListDataType.apilist,apiInfo.getId());
+        }
     }
 
 
@@ -199,6 +212,10 @@ public class ApiInfoService {
             ApiDirectory dbDirectory = currDirectories.stream().filter(item -> item.getId().equals(directory.getId())).findFirst().orElse(null);
             if (dbDirectory == null) {
                 dataSourceManager.getStoreApiDataSource().saveEntity(directory);
+                //添加后调用权限
+                if(dataListPermissionClient.hasPermissionService()){
+                    dataListPermissionClient.addPermission(DataConstant.ListDataType.dirlist,directory.getId());
+                }
             } else {
                 dataSourceManager.getStoreApiDataSource().updateEntityById(directory);
             }
@@ -218,6 +235,10 @@ public class ApiInfoService {
                 apiInfo.setCreateTime(sdf.format(new Date()));
                 apiInfo.setUpdateTime(sdf.format(new Date()));
                 dataSourceManager.getStoreApiDataSource().saveEntity(apiInfo);
+                //添加后调用权限
+                if(dataListPermissionClient.hasPermissionService()){
+                    dataListPermissionClient.addPermission(DataConstant.ListDataType.apilist,apiInfo.getId());
+                }
             } else {
                 apiInfo.setUpdateTime(sdf.format(new Date()));
                 dataSourceManager.getStoreApiDataSource().updateEntityById(apiInfo);
@@ -347,12 +368,19 @@ public class ApiInfoService {
             ApiDirectory dir = new ApiDirectory();
             dir.setId(directoryId);
             dataSourceManager.getStoreApiDataSource().removeEntityById(dir);
-
+            //删除后调用权限
+            if(dataListPermissionClient.hasPermissionService()){
+                dataListPermissionClient.deletePermission(DataConstant.ListDataType.dirlist,dir.getId());
+            }
             //目录下的api列表
             List<ApiInfo> apiInfoList = apiInfoCache.getAll().stream().filter(item->directoryId.equals(item.getDirectoryId())).collect(Collectors.toList());
 
             for (ApiInfo apiInfo : apiInfoList ){
                 deleteApiInfo(apiInfo);
+                //删除后调用权限
+                if(dataListPermissionClient.hasPermissionService()){
+                    dataListPermissionClient.deletePermission(DataConstant.ListDataType.apilist,apiInfo.getId());
+                }
             }
         }
 
@@ -371,6 +399,10 @@ public class ApiInfoService {
         if (StringUtils.isEmpty(directory.getId())){
             directory.setId(GenerateId.get().toHexString());
             dataSourceManager.getStoreApiDataSource().saveEntity(directory);
+            //添加权限
+            if(dataListPermissionClient.hasPermissionService()){
+                dataListPermissionClient.addPermission(DataConstant.ListDataType.dirlist,directory.getId());
+            }
             return;
         }
 

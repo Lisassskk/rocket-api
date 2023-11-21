@@ -9,6 +9,9 @@ import com.github.alenfive.rocketapi.extend.ApiInfoContent;
 import com.github.alenfive.rocketapi.extend.IApiDocSync;
 import com.github.alenfive.rocketapi.extend.IScriptEncrypt;
 import com.github.alenfive.rocketapi.extend.IUserAuthorization;
+import com.github.alenfive.rocketapi.permission.api.ApiPermission;
+import com.github.alenfive.rocketapi.permission.constant.DataConstant;
+import com.github.alenfive.rocketapi.permission.datalist.DataListPermissionClient;
 import com.github.alenfive.rocketapi.script.IScriptParse;
 import com.github.alenfive.rocketapi.service.*;
 import com.github.alenfive.rocketapi.utils.GenerateId;
@@ -89,6 +92,9 @@ public class ApiController {
     @Autowired
     private CompletionService completionService;
 
+    @Autowired
+    private DataListPermissionClient dataListPermissionClient;
+
     /**
      * LOAD API LIST
      */
@@ -106,6 +112,10 @@ public class ApiController {
                     return apiInfo;
                 }).collect(Collectors.toList());
 
+        if(dataListPermissionClient.hasPermissionService()){
+            List<String> list = dataListPermissionClient.filterByPermission(result.stream().map(e->e.getId()).collect(Collectors.toList()), DataConstant.ListDataType.apilist);
+            result = result.stream().filter(e->list.indexOf(e.getId())>-1).collect(Collectors.toList());
+        }
         return  ApiResult.success(result);
     }
 
@@ -146,6 +156,7 @@ public class ApiController {
      * @param apiInfo
      */
     @PostMapping("/api-info")
+    @ApiPermission(permissions = {DataConstant.ApiDataList.ADD})
     public ApiResult saveOrUpdateApiInfo(@RequestBody ApiInfo apiInfo,HttpServletRequest request) {
 
         String user = loginService.getUser(request);
@@ -164,7 +175,6 @@ public class ApiController {
             }
 
             String apiInfoId = apiInfoService.saveApiInfo(apiInfo);
-
             return ApiResult.success(apiInfoId);
         }catch (Exception e){
             e.printStackTrace();
@@ -249,6 +259,7 @@ public class ApiController {
      * @param apiInfo
      */
     @DeleteMapping("/api-info")
+    @ApiPermission(permissions = {DataConstant.ApiDataList.DELETE})
     public ApiResult deleteApiInfo(@RequestBody ApiInfo apiInfo,HttpServletRequest request){
         String user = loginService.getUser(request);
         if(StringUtils.isEmpty(user)){
@@ -512,9 +523,16 @@ public class ApiController {
      */
     @GetMapping("/directory/list")
     public ApiResult directoryList(){
-        return ApiResult.success(apiInfoService.loadDirectoryList().stream()
+        List<ApiDirectory> result = apiInfoService.loadDirectoryList().stream()
                 .sorted(Comparator.comparing(ApiDirectory::getName).thenComparing(ApiDirectory::getPath))
-                .collect(Collectors.toList()));
+                .collect(Collectors.toList());
+        if(dataListPermissionClient.hasPermissionService()){
+            List<String> list = dataListPermissionClient.filterByPermission(result.stream().map(e->e.getId()).collect(Collectors.toList()), DataConstant.ListDataType.dirlist);
+            result = result.stream().filter(e->list.indexOf(e.getId())>-1).collect(Collectors.toList());
+        }
+        return ApiResult.success(result);
+
+
     }
 
     /**
@@ -523,6 +541,7 @@ public class ApiController {
      * @return
      */
     @PostMapping("/directory")
+    @ApiPermission(permissions = {DataConstant.DirDataList.ADD})
     public ApiResult saveDirectory(@RequestBody ApiDirectory directory,HttpServletRequest request){
         String user = loginService.getUser(request);
         if(StringUtils.isEmpty(user)){
@@ -543,6 +562,7 @@ public class ApiController {
      * @return
      */
     @DeleteMapping("/directory")
+    @ApiPermission(permissions = {DataConstant.DirDataList.DELETE})
     public ApiResult removeDirectory(@RequestBody ApiDirectory directory,HttpServletRequest request){
         String user = loginService.getUser(request);
         if(StringUtils.isEmpty(user)){
@@ -591,6 +611,7 @@ public class ApiController {
      * @return
      */
     @PostMapping("/import")
+    @ApiPermission(permissions = {DataConstant.ApiDataList.ADD})
     public ApiResult importApiInfo(MultipartFile file,Integer override,HttpServletRequest request){
         String user = loginService.getUser(request);
 
@@ -639,8 +660,12 @@ public class ApiController {
     @GetMapping("/db-config/list")
     public ApiResult listDbConfig(){
         try {
-            List<DBConfig> dbConfigs = dataSourceService.getDBConfig();
-            return ApiResult.success(dbConfigs);
+            List<DBConfig> result = dataSourceService.getDBConfig();
+            if(dataListPermissionClient.hasPermissionService()){
+                List<String> list = dataListPermissionClient.filterByPermission(result.stream().map(e->e.getId()).collect(Collectors.toList()), DataConstant.ListDataType.apilist);
+                result = result.stream().filter(e->list.indexOf(e.getId())>-1).collect(Collectors.toList());
+            }
+            return ApiResult.success(result);
         }catch (Exception e){
             e.printStackTrace();
             return ApiResult.fail(e.getMessage());
@@ -652,6 +677,7 @@ public class ApiController {
      * @param config
      */
     @PostMapping("/db-config")
+    @ApiPermission(permissions = {DataConstant.DataSourceList.ADD})
     public ApiResult saveDBConfig(@RequestBody DBConfig config,HttpServletRequest request) {
 
         String user = loginService.getUser(request);
@@ -673,6 +699,7 @@ public class ApiController {
      * @param config
      */
     @DeleteMapping("/db-config")
+    @ApiPermission(permissions = {DataConstant.DataSourceList.DELETE})
     public ApiResult deleteDBConfig(@RequestBody DBConfig config,HttpServletRequest request) throws IOException {
 
         String user = loginService.getUser(request);
